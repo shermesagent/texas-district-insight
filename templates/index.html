@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Texas District Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6f8; color: #1a1a2e; min-height: 100vh; }
+  
+  /* Header */
+  .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 1.5rem 2rem 3rem; }
+  .header h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; }
+  .header p { font-size: 0.9rem; color: #8899aa; margin-top: 0.25rem; }
+
+  /* Search */
+  .search-wrap { max-width: 640px; margin: -1.5rem auto 0; padding: 0 1rem; position: relative; z-index: 10; }
+  .search-box { position: relative; }
+  .search-box input {
+    width: 100%; padding: 0.9rem 1rem 0.9rem 2.75rem; font-size: 1.05rem;
+    border: 2px solid #e0e0e0; border-radius: 10px; background: #fff;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08); outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .search-box input:focus { border-color: #2563eb; box-shadow: 0 4px 24px rgba(37,99,235,0.15); }
+  .search-box .icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); color: #999; font-size: 1.1rem; pointer-events: none; }
+
+  /* Autocomplete */
+  .autocomplete { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #e0e0e0; border-radius: 0 0 10px 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); max-height: 340px; overflow-y: auto; display: none; z-index: 100; }
+  .autocomplete.open { display: block; }
+  .ac-item { padding: 0.7rem 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; border-bottom: 1px solid #f0f0f0; }
+  .ac-item:last-child { border: none; }
+  .ac-item:hover, .ac-item.highlight { background: #eff6ff; }
+  .ac-item .ac-name { font-weight: 500; }
+  .ac-item .ac-meta { color: #888; font-size: 0.8rem; }
+
+  /* Main content */
+  .content { max-width: 1200px; margin: 1.5rem auto; padding: 0 1rem; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 3rem; color: #666; }
+  .loading .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid #e0e0e0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Welcome */
+  .welcome { text-align: center; padding: 3rem 1rem; }
+  .welcome h2 { font-size: 1.3rem; color: #333; margin-bottom: 0.5rem; }
+  .welcome p { color: #777; font-size: 0.95rem; max-width: 480px; margin: 0 auto; line-height: 1.6; }
+
+  /* District header */
+  .district-header { background: #fff; border-radius: 12px; padding: 1.5rem 2rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 1rem; display: none; }
+  .district-header.visible { display: block; }
+  .dh-main { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+  .dh-name { font-size: 1.6rem; font-weight: 700; }
+  .dh-name .cdc { font-size: 0.8rem; color: #999; font-weight: 400; margin-left: 0.5rem; }
+  .dh-tags { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .tag { font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 20px; font-weight: 500; }
+  .tag-rural { background: #e0f7fa; color: #00838f; }
+  .tag-urban { background: #e8eaf6; color: #3949ab; }
+  .tag-charter { background: #fff3e0; color: #e65100; }
+  .tag-region { background: #f3e5f5; color: #7b1fa2; }
+  .dh-stats { display: flex; gap: 2rem; flex-wrap: wrap; margin-top: 1rem; }
+  .dh-stat { text-align: center; }
+  .dh-stat .num { font-size: 1.35rem; font-weight: 700; color: #1a1a2e; }
+  .dh-stat .lbl { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.1rem; }
+
+  /* Tab bar */
+  .tabs { display: flex; gap: 0; margin-bottom: 1rem; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .tab { flex: 1; padding: 0.8rem 1rem; text-align: center; font-size: 0.85rem; font-weight: 500; cursor: pointer; color: #666; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .tab:hover { color: #333; background: #fafafa; }
+  .tab.active { color: #2563eb; border-bottom-color: #2563eb; background: #f8faff; }
+
+  /* Tab content */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Dashboard section */
+  .section { background: #fff; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 1rem; }
+  .section h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #333; display: flex; align-items: center; gap: 0.5rem; }
+  .section h3 .badge { font-size: 0.7rem; background: #e0e7ff; color: #4338ca; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 500; }
+
+  /* Demo bars */
+  .demo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+  .demo-item { }
+  .demo-item .lbl { font-size: 0.78rem; color: #666; margin-bottom: 0.2rem; }
+  .demo-bar-wrap { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+  .demo-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+  .demo-bar.econ { background: linear-gradient(90deg, #f97316, #fb923c); }
+  .demo-bar.ell { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+  .demo-bar.sped { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+  .demo-bar.atrisk { background: linear-gradient(90deg, #dc2626, #f87171); }
+  .demo-bar.hisp { background: linear-gradient(90deg, #059669, #34d399); }
+  .demo-bar.biling { background: linear-gradient(90deg, #d97706, #fbbf24); }
+  .demo-item .val { font-size: 0.9rem; font-weight: 600; margin-top: 0.25rem; }
+
+  /* Performance table */
+  .perf-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .perf-table th { text-align: left; padding: 0.5rem 0.75rem; background: #f9fafb; font-weight: 600; color: #555; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 2px solid #eee; }
+  .perf-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #f0f0f0; }
+  .perf-table tr:hover td { background: #fafbff; }
+  .perf-table .grade-label { font-weight: 600; color: #333; }
+  .perf-table .score { font-weight: 600; }
+  .perf-table .score.above { color: #059669; }
+  .perf-table .score.below { color: #dc2626; }
+  .perf-table .score.neutral { color: #666; }
+  .perf-table .delta { font-size: 0.75rem; margin-left: 0.3rem; }
+  .perf-table .delta.pos { color: #059669; }
+  .perf-table .delta.neg { color: #dc2626; }
+  .num-col { text-align: right; }
+
+  /* Peer list */
+  .peer-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .peer-table th { text-align: left; padding: 0.4rem 0.6rem; background: #f9fafb; font-weight: 600; color: #555; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 2px solid #eee; }
+  .peer-table td { padding: 0.4rem 0.6rem; border-bottom: 1px solid #f0f0f0; }
+  .peer-table tr:hover td { background: #fafbff; }
+  .peer-table .rank-num { font-weight: 600; color: #888; width: 2rem; text-align: center; }
+  .peer-table .peer-name { font-weight: 500; }
+  .peer-table .peer-name .peer-cdc { font-size: 0.7rem; color: #aaa; margin-left: 0.3rem; }
+  .peer-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .peer-table .highlight-row { background: #f0f7ff; }
+  .peer-table .highlight-row td { border-bottom-color: #dbeafe; }
+
+  /* Summary note */
+  .summary-box { background: #f8faff; border-left: 3px solid #2563eb; border-radius: 0 8px 8px 0; padding: 1rem 1.2rem; margin-top: 1rem; font-size: 0.88rem; color: #333; line-height: 1.6; }
+  .summary-box strong { color: #1a1a2e; }
+
+  .empty-state { text-align: center; padding: 2rem; color: #888; font-size: 0.9rem; }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .header { padding: 1rem 1rem 2.5rem; }
+    .search-wrap { margin-top: -1.2rem; }
+    .dh-stats { gap: 1rem; }
+    .dh-stat .num { font-size: 1.1rem; }
+    .demo-grid { grid-template-columns: repeat(2, 1fr); }
+    .perf-table, .peer-table { font-size: 0.78rem; }
+    .perf-table th, .perf-table td, .peer-table th, .peer-table td { padding: 0.3rem 0.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📊 Texas District Dashboard</h1>
+  <p>Search any district to see demographics, peer groups, and performance comparison</p>
+</div>
+
+<div class="search-wrap">
+  <div class="search-box">
+    <span class="icon">🔍</span>
+    <input type="text" id="search" placeholder="Search a district..." autocomplete="off" spellcheck="false">
+    <div class="autocomplete" id="autocomplete"></div>
+  </div>
+</div>
+
+<div class="content" id="content">
+  <div class="welcome" id="welcome">
+    <h2>👆 Search for a district to get started</h2>
+    <p>Try typing Farmersville, Highland Park, Dallas, Austin, or Tidehaven to see demographics, peer comparison groups, and STAAR performance data.</p>
+  </div>
+  <div id="dashboard" style="display:none"></div>
+</div>
+
+<script>
+const searchInput = document.getElementById('search');
+const autocomplete = document.getElementById('autocomplete');
+const welcome = document.getElementById('welcome');
+const dashboard = document.getElementById('dashboard');
+
+let selectedCDC = null;
+let searchTimeout = null;
+let highlightIndex = -1;
+let searchResults = [];
+
+// ── Search ──
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimeout);
+  highlightIndex = -1;
+  const q = searchInput.value.trim();
+  if (!q) { autocomplete.classList.remove('open'); return; }
+  searchTimeout = setTimeout(() => fetchSearch(q), 150);
+});
+
+searchInput.addEventListener('keydown', (e) => {
+  const items = autocomplete.querySelectorAll('.ac-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    highlightIndex = Math.min(highlightIndex + 1, items.length - 1);
+    updateHighlight(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    highlightIndex = Math.max(highlightIndex - 1, 0);
+    updateHighlight(items);
+  } else if (e.key === 'Enter') {
+    if (highlightIndex >= 0 && items[highlightIndex]) {
+      items[highlightIndex].click();
+    } else if (items.length > 0) {
+      items[0].click();
+    }
+  } else if (e.key === 'Escape') {
+    autocomplete.classList.remove('open');
+    searchInput.blur();
+  }
+});
+
+function updateHighlight(items) {
+  items.forEach((el, i) => el.classList.toggle('highlight', i === highlightIndex));
+}
+
+async function fetchSearch(q) {
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&_=${Date.now()}`);
+    const data = await res.json();
+    searchResults = data.results;
+    renderAutocomplete(searchResults);
+  } catch(e) {
+    console.error('Search failed:', e);
+  }
+}
+
+function renderAutocomplete(results) {
+  autocomplete.innerHTML = '';
+  if (!results.length) {
+    autocomplete.innerHTML = '<div class="ac-item" style="color:#999">No districts found</div>';
+    autocomplete.classList.add('open');
+    return;
+  }
+  results.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'ac-item';
+    div.innerHTML = `<span class="ac-name">${r.name}</span><span class="ac-meta">${r.county} · ${r.region}</span>`;
+    div.addEventListener('click', () => selectDistrict(r.cdc));
+    autocomplete.appendChild(div);
+  });
+  autocomplete.classList.add('open');
+}
+
+// ── District selection ──
+async function selectDistrict(cdc) {
+  autocomplete.classList.remove('open');
+  selectedCDC = cdc;
+  welcome.style.display = 'none';
+  dashboard.style.display = 'block';
+  dashboard.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top:0.8rem">Loading...</p></div>';
+  
+  // Get info about the district for search bar
+  const found = searchResults.find(r => r.cdc === cdc);
+  if (found) searchInput.value = found.name;
+  
+  try {
+    const res = await fetch(`/api/districts/${cdc}`);
+    if (!res.ok) {
+      dashboard.innerHTML = `<div class="empty-state"><h3>District not found</h3><p>CDE: ${cdc}</p></div>`;
+      return;
+    }
+    const data = await res.json();
+    renderDashboard(data);
+  } catch(e) {
+    dashboard.innerHTML = `<div class="empty-state"><h3>Error loading data</h3><p>${e.message}</p></div>`;
+  }
+}
+
+// ── Dashboard rendering ──
+function renderDashboard(d) {
+  const perf = d.performance?.math || {};
+  const grades = Object.keys(perf).sort();
+  const hasPerf = grades.length > 0;
+  
+  // Get county/region tag
+  const regionShort = d.region ? d.region.replace('REGION ', '') : '';
+  const charterTag = d.charter ? '<span class="tag tag-charter">Charter</span>' : '';
+  
+  // Enrollment display
+  const enrollment = d.enrollment || 0;
+  const enrollDisplay = enrollment >= 1000 ? (enrollment/1000).toFixed(1) + 'K' : enrollment;
+
+  let html = '';
+
+  // ── District header ──
+  html += `<div class="district-header visible">
+    <div class="dh-main">
+      <div class="dh-name">${d.name} <span class="cdc">${d.cdc}</span></div>
+      <div class="dh-tags">
+        <span class="tag tag-region">${regionShort}</span>
+        <span class="tag tag-rural">${d.county} County</span>
+        ${charterTag}
+        ${d.tea_rating ? `<span class="tag" style="background:#fce4ec;color:#c62828">Rating: ${d.tea_rating}</span>` : ''}
+      </div>
+    </div>
+    <div class="dh-stats">
+      <div class="dh-stat"><div class="num">${enrollDisplay}</div><div class="lbl">Enrollment</div></div>
+      <div class="dh-stat"><div class="num">${formatPct(d.econ_disadv_pct)}</div><div class="lbl">Econ Disadv</div></div>
+      <div class="dh-stat"><div class="num">${formatPct(d.eb_el_pct)}</div><div class="lbl">EB/EL</div></div>
+      <div class="dh-stat"><div class="num">${formatPct(d.sped_pct)}</div><div class="lbl">Special Ed</div></div>
+    </div>
+  </div>`;
+
+  // ── Tabs ──
+  html += `<div class="tabs">
+    <div class="tab active" data-tab="demographics">Demographics</div>
+    <div class="tab ${hasPerf ? '' : 'disabled'}" data-tab="performance" style="${hasPerf ? '' : 'color:#ccc;cursor:default'}">Performance</div>
+    <div class="tab" data-tab="demo-peers">Demo Peers</div>
+    <div class="tab" data-tab="geo-peers">Geo Peers</div>
+  </div>`;
+
+  // ── Tab 1: Demographics ──
+  html += `<div class="tab-content active" id="tab-demographics">`;
+  html += `<div class="section">
+    <h3>🏫 Student Profile</h3>
+    <div class="demo-grid">
+      <div class="demo-item">
+        <div class="lbl">Economically Disadvantaged</div>
+        <div class="demo-bar-wrap"><div class="demo-bar econ" style="width:${d.econ_disadv_pct || 0}%"></div></div>
+        <div class="val">${formatPct(d.econ_disadv_pct)}</div>
+      </div>
+      <div class="demo-item">
+        <div class="lbl">Emergent Bilingual / EL</div>
+        <div class="demo-bar-wrap"><div class="demo-bar ell" style="width:${d.eb_el_pct || 0}%"></div></div>
+        <div class="val">${formatPct(d.eb_el_pct)}</div>
+      </div>
+      <div class="demo-item">
+        <div class="lbl">Special Education</div>
+        <div class="demo-bar-wrap"><div class="demo-bar sped" style="width:${d.sped_pct || 0}%"></div></div>
+        <div class="val">${formatPct(d.sped_pct)}</div>
+      </div>
+      <div class="demo-item">
+        <div class="lbl">At-Risk</div>
+        <div class="demo-bar-wrap"><div class="demo-bar atrisk" style="width:${d.at_risk_pct || 0}%"></div></div>
+        <div class="val">${formatPct(d.at_risk_pct)}</div>
+      </div>
+      <div class="demo-item">
+        <div class="lbl">Hispanic</div>
+        <div class="demo-bar-wrap"><div class="demo-bar hisp" style="width:${d.hispanic_pct || 0}%"></div></div>
+        <div class="val">${formatPct(d.hispanic_pct)}</div>
+      </div>
+      <div class="demo-item">
+        <div class="lbl">Bilingual</div>
+        <div class="demo-bar-wrap"><div class="demo-bar biling" style="width:${d.bilingual_pct || 0}%"></div></div>
+        <div class="val">${formatPct(d.bilingual_pct)}</div>
+      </div>
+    </div>
+  </div>`;
+
+  // Ethnicity breakdown
+  html += `<div class="section">
+    <h3>🎨 Ethnicity Breakdown</h3>
+    <div class="demo-grid">
+      <div class="demo-item"><div class="lbl">White</div><div class="demo-bar-wrap"><div class="demo-bar" style="width:${d.white_pct||0}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div><div class="val">${formatPct(d.white_pct)}</div></div>
+      <div class="demo-item"><div class="lbl">Hispanic</div><div class="demo-bar-wrap"><div class="demo-bar" style="width:${d.hispanic_pct||0}%;background:linear-gradient(90deg,#059669,#34d399)"></div></div><div class="val">${formatPct(d.hispanic_pct)}</div></div>
+      <div class="demo-item"><div class="lbl">Black</div><div class="demo-bar-wrap"><div class="demo-bar" style="width:${d.black_pct||0}%;background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div></div><div class="val">${formatPct(d.black_pct)}</div></div>
+      <div class="demo-item"><div class="lbl">Asian</div><div class="demo-bar-wrap"><div class="demo-bar" style="width:${d.asian_pct||0}%;background:linear-gradient(90deg,#0891b2,#22d3ee)"></div></div><div class="val">${formatPct(d.asian_pct)}</div></div>
+      <div class="demo-item"><div class="lbl">Two or More</div><div class="demo-bar-wrap"><div class="demo-bar" style="width:${d.two_or_more_pct||0}%;background:linear-gradient(90deg,#d97706,#fbbf24)"></div></div><div class="val">${formatPct(d.two_or_more_pct)}</div></div>
+    </div>
+  </div>`;
+
+  html += `</div>`;
+
+  // ── Tab 2: Performance ──
+  html += `<div class="tab-content" id="tab-performance">`;
+  if (hasPerf) {
+    html += `<div class="section">
+      <h3>🧮 STAAR Math Performance (2024-25)</h3>
+      <table class="perf-table">
+        <thead><tr><th>Grade</th><th class="num-col">% Approaches+</th><th class="num-col">% Meets+</th><th class="num-col">% Masters</th></tr></thead>
+        <tbody>`;
+
+    grades.forEach(g => {
+      const p = perf[g];
+      const app = p.app != null ? p.app.toFixed(1) + '%' : '—';
+      const meets = p.meets != null ? p.meets.toFixed(1) + '%' : '—';
+      const mast = p.mast != null ? p.mast.toFixed(1) + '%' : '—';
+
+      // Compare vs demo peers
+      const demoAvg = d.demo_avg?.[g];
+      const geoAvg = d.geo_avg?.[g];
+      
+      const appDelta = (demoAvg && p.app != null) ? p.app - demoAvg.app : null;
+      const meetsDelta = (demoAvg && p.meets != null) ? p.meets - demoAvg.meets : null;
+
+      html += `<tr>
+        <td class="grade-label">Grade ${g}</td>
+        <td class="num-col score ${appDelta > 0 ? 'above' : appDelta < 0 ? 'below' : 'neutral'}">
+          ${app}
+          ${appDelta !== null ? `<span class="delta ${appDelta > 0 ? 'pos' : 'neg'}">${appDelta > 0 ? '▲' : '▼'}${Math.abs(appDelta).toFixed(1)}</span>` : ''}
+        </td>
+        <td class="num-col score ${meetsDelta > 0 ? 'above' : meetsDelta < 0 ? 'below' : 'neutral'}">
+          ${meets}
+          ${meetsDelta !== null ? `<span class="delta ${meetsDelta > 0 ? 'pos' : 'neg'}">${meetsDelta > 0 ? '▲' : '▼'}${Math.abs(meetsDelta).toFixed(1)}</span>` : ''}
+        </td>
+        <td class="num-col">${mast}</td>
+      </tr>`;
+    });
+
+    html += `</tbody></table>`;
+    html += `<div class="summary-box">📊 Values shown vs. <strong>demographic peer average</strong>. Green ▲ = above peer average, Red ▼ = below peer average.</div>`;
+    html += `</div>`;
+  } else {
+    html += `<div class="empty-state"><p>No TAPR performance data available for this district</p></div>`;
+  }
+  html += `</div>`;
+
+  // ── Tab 3: Demo Peers ──
+  html += `<div class="tab-content" id="tab-demo-peers">`;
+  renderPeersTab(html, 'demo', d);
+  html = html.replace('RENDER_PEERS_DEMO', '');
+  // Actually, let me use a function approach instead
+  html += `</div>`;
+
+  // ── Tab 4: Geo Peers ──
+  html += `<div class="tab-content" id="tab-geo-peers">`;
+  renderPeersTab(html, 'geo', d);
+  html = html.replace('RENDER_PEERS_GEO', '');
+  html += `</div>`;
+
+  dashboard.innerHTML = html;
+
+  // Now add peer data via separate renders
+  const demoPeersEl = document.getElementById('tab-demo-peers');
+  if (demoPeersEl) {
+    demoPeersEl.innerHTML = buildPeersSection('demographic', d.demo_peers, d.demo_avg, perf);
+  }
+  const geoPeersEl = document.getElementById('tab-geo-peers');
+  if (geoPeersEl) {
+    geoPeersEl.innerHTML = buildPeersSection('geographic', d.geo_peers, d.geo_avg, perf);
+  }
+
+  // ── Tab switching ──
+  document.querySelectorAll('.tabs .tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      if (tab.style.cursor === 'default') return;
+      document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+      tab.classList.add('active');
+      const target = document.getElementById('tab-' + tab.dataset.tab);
+      if (target) target.classList.add('active');
+    });
+  });
+}
+
+function renderPeersTab(baseHtml, type, d) {
+  // Placeholder — we'll replace content directly
+}
+
+function buildPeersSection(type, peers, avg, districtPerf) {
+  let html = '';
+  if (!peers || peers.length === 0) {
+    return `<div class="empty-state"><p>No ${type} peer data available</p></div>`;
+  }
+
+  const label = type === 'demographic' ? 'Demographic Similarity' : 'Geographic Proximity';
+  const scoreLabel = type === 'demographic' ? 'Similarity Score' : 'Distance (mi)';
+
+  html += `<div class="section">
+    <h3>🗺️ ${label} Peers <span class="badge">Top 20</span></h3>
+    <div style="overflow-x:auto">
+    <table class="peer-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>District</th>
+          <th class="num">${scoreLabel}</th>
+          <th class="num">Enroll</th>
+          <th class="num">Econ%</th>
+          <th class="num">EB/EL%</th>
+          <th class="num">Gr3 App+</th>
+          <th class="num">Gr4 App+</th>
+          <th class="num">Gr5 App+</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+  peers.forEach(p => {
+    const pPerf = p.performance?.math || {};
+    const gr3 = pPerf[3]?.app;
+    const gr4 = pPerf[4]?.app;
+    const gr5 = pPerf[5]?.app;
+    const score = type === 'demographic' ? p.score.toFixed(4) : p.dist_mi.toFixed(0) + ' mi';
+    
+    html += `<tr>
+      <td class="rank-num">${p.rank}</td>
+      <td class="peer-name">${p.name} <span class="peer-cdc">${p.cdc}</span></td>
+      <td class="num">${score}</td>
+      <td class="num">${p.enrollment || '—'}</td>
+      <td class="num">${p.econ_disadv_pct != null ? p.econ_disadv_pct.toFixed(0) + '%' : '—'}</td>
+      <td class="num">${p.eb_el_pct != null ? p.eb_el_pct.toFixed(0) + '%' : '—'}</td>
+      <td class="num">${gr3 != null ? gr3.toFixed(0) + '%' : '—'}</td>
+      <td class="num">${gr4 != null ? gr4.toFixed(0) + '%' : '—'}</td>
+      <td class="num">${gr5 != null ? gr5.toFixed(0) + '%' : '—'}</td>
+    </tr>`;
+  });
+
+  // Peer averages row
+  html += `<tr class="highlight-row">
+    <td class="rank-num">—</td>
+    <td class="peer-name"><strong>Peer Average</strong></td>
+    <td class="num">—</td>
+    <td class="num">—</td>
+    <td class="num">—</td>
+    <td class="num">—</td>
+    <td class="num"><strong>${avg?.[3]?.app != null ? avg[3].app.toFixed(1) + '%' : '—'}</strong></td>
+    <td class="num"><strong>${avg?.[4]?.app != null ? avg[4].app.toFixed(1) + '%' : '—'}</strong></td>
+    <td class="num"><strong>${avg?.[5]?.app != null ? avg[5].app.toFixed(1) + '%' : '—'}</strong></td>
+  </tr>`;
+
+  html += `</tbody></table></div>`;
+
+  // Summary vs peers
+  const grades = Object.keys(districtPerf || {}).sort();
+  if (grades.length > 0) {
+    html += `<div class="summary-box">`;
+    grades.forEach(g => {
+      const dP = districtPerf[g];
+      const a = avg?.[g];
+      if (dP && a && dP.app != null && a.app != null) {
+        const delta = dP.app - a.app;
+        const dir = delta > 0 ? 'ahead of' : delta < 0 ? 'behind' : 'aligned with';
+        html += `📌 <strong>Grade ${g}:</strong> ${dP.app.toFixed(0)}% App+ — <strong>${Math.abs(delta).toFixed(1)} points ${dir}</strong> the ${type} peer average (${a.app.toFixed(1)}%).<br>`;
+      }
+    });
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function formatPct(val) {
+  if (val == null) return '—';
+  return val.toFixed(1) + '%';
+}
+
+// ── Load on Enter if CDC is in URL hash ──
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.location.hash) {
+    const cdc = window.location.hash.replace('#', '');
+    if (cdc.length === 6) {
+      fetchSearch(cdc).then(() => selectDistrict(cdc));
+    }
+  }
+});
+</script>
+</body>
+</html>

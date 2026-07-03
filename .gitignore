@@ -1,0 +1,16 @@
+# Raw CSVs - too large, store only processed JSON
+data/raw/
+*.csv
+!data/staar_2026.json
+!data/districts.json
+!data/district_list.json
+!data/peers.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+google_token.json
