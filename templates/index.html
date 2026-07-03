@@ -3,174 +3,289 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Texas District Dashboard</title>
+<title>Texas School Compass Report</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6f8; color: #1a1a2e; min-height: 100vh; }
-  
-  /* Header */
-  .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 1.5rem 2rem 3rem; }
-  .header h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; }
-  .header p { font-size: 0.9rem; color: #8899aa; margin-top: 0.25rem; }
-
-  /* Search */
-  .search-wrap { max-width: 640px; margin: -1.5rem auto 0; padding: 0 1rem; position: relative; z-index: 10; }
-  .search-box { position: relative; }
-  .search-box input {
-    width: 100%; padding: 0.9rem 1rem 0.9rem 2.75rem; font-size: 1.05rem;
-    border: 2px solid #e0e0e0; border-radius: 10px; background: #fff;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08); outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #14233B; color: #1A1A1A; min-height: 100vh;
   }
-  .search-box input:focus { border-color: #2563eb; box-shadow: 0 4px 24px rgba(37,99,235,0.15); }
-  .search-box .icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); color: #999; font-size: 1.1rem; pointer-events: none; }
 
-  /* Autocomplete */
-  .autocomplete { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #e0e0e0; border-radius: 0 0 10px 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); max-height: 340px; overflow-y: auto; display: none; z-index: 100; }
+  /* ── Layout ── */
+  .app-wrap { max-width: 1280px; margin: 0 auto; padding: 0; }
+
+  /* ── Header ── */
+  .header {
+    background: #14233B; padding: 2rem 2rem 1.5rem; border-bottom: 3px solid #C08A2E;
+  }
+  .header h1 {
+    font-family: Georgia, 'Times New Roman', serif; font-weight: 700;
+    font-size: 1.65rem; color: #C08A2E; letter-spacing: -0.01em;
+  }
+  .header p { font-size: 0.9rem; color: #F5F0E8; margin-top: 0.3rem; opacity: 0.75; }
+  .header .subtitle { font-size: 0.8rem; color: #C08A2E; margin-top: 0.15rem; font-family: Georgia, serif; font-style: italic; }
+
+  /* ── Search ── */
+  .search-wrap {
+    background: #14233B; padding: 0 2rem 1.75rem; position: relative; z-index: 50;
+  }
+  .search-box { position: relative; max-width: 600px; }
+  .search-box input {
+    width: 100%; padding: 0.85rem 1rem 0.85rem 2.6rem; font-size: 1rem;
+    border: 2px solid rgba(192,138,46,0.3); border-radius: 8px; background: #1A2D4A;
+    color: #F5F0E8; outline: none; transition: border-color 0.2s;
+  }
+  .search-box input::placeholder { color: rgba(245,240,232,0.4); }
+  .search-box input:focus { border-color: #C08A2E; }
+  .search-box .icon {
+    position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%);
+    color: rgba(245,240,232,0.4); font-size: 1rem; pointer-events: none;
+  }
+  .autocomplete {
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: #1A2D4A; border: 1px solid rgba(192,138,46,0.3); border-top: none;
+    border-radius: 0 0 8px 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    max-height: 340px; overflow-y: auto; display: none; z-index: 100;
+  }
   .autocomplete.open { display: block; }
-  .ac-item { padding: 0.7rem 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; border-bottom: 1px solid #f0f0f0; }
+  .ac-item {
+    padding: 0.7rem 1rem; cursor: pointer; display: flex; justify-content: space-between;
+    align-items: center; font-size: 0.9rem; color: #F5F0E8;
+    border-bottom: 1px solid rgba(245,240,232,0.06);
+  }
   .ac-item:last-child { border: none; }
-  .ac-item:hover, .ac-item.highlight { background: #eff6ff; }
+  .ac-item:hover, .ac-item.highlight { background: rgba(192,138,46,0.15); }
   .ac-item .ac-name { font-weight: 500; }
-  .ac-item .ac-meta { color: #888; font-size: 0.8rem; }
+  .ac-item .ac-meta { color: rgba(245,240,232,0.5); font-size: 0.8rem; }
 
-  /* Main content */
-  .content { max-width: 1200px; margin: 1.5rem auto; padding: 0 1rem; }
+  /* ── Controls bar ── */
+  .controls-bar {
+    background: #14233B; padding: 0 2rem 1.5rem; display: flex; gap: 1rem;
+    flex-wrap: wrap; align-items: center;
+  }
+  .controls-bar label { color: #C08A2E; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .controls-bar select {
+    padding: 0.5rem 0.75rem; border: 1px solid rgba(192,138,46,0.3); border-radius: 6px;
+    background: #1A2D4A; color: #F5F0E8; font-size: 0.88rem; outline: none;
+    cursor: pointer; min-width: 120px;
+  }
+  .controls-bar select:focus { border-color: #C08A2E; }
+  .controls-bar .control-group { display: flex; align-items: center; gap: 0.5rem; }
 
-  /* Loading */
-  .loading { text-align: center; padding: 3rem; color: #666; }
-  .loading .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid #e0e0e0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  /* ── District card ── */
+  .district-card {
+    background: #1A2D4A; border-left: 4px solid #C08A2E; border-radius: 0 8px 8px 0;
+    padding: 1.25rem 1.5rem; margin: 0 2rem 1rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  }
+  .dc-name { font-family: Georgia, serif; font-size: 1.35rem; font-weight: 700; color: #C08A2E; }
+  .dc-name .dc-cdc { font-size: 0.75rem; color: rgba(245,240,232,0.4); font-weight: 400; font-family: sans-serif; margin-left: 0.5rem; }
+  .dc-meta { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 0.6rem; }
+  .dc-meta-item { font-size: 0.78rem; color: rgba(245,240,232,0.65); }
+  .dc-meta-item strong { color: #F5F0E8; font-weight: 600; }
+  .dc-stats { display: flex; gap: 2rem; flex-wrap: wrap; margin-top: 0.75rem; }
+  .dc-stat { text-align: center; }
+  .dc-stat .num { font-size: 1.5rem; font-weight: 700; color: #C08A2E; }
+  .dc-stat .lbl { font-size: 0.68rem; color: rgba(245,240,232,0.6); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.05rem; }
 
-  /* Welcome */
-  .welcome { text-align: center; padding: 3rem 1rem; }
-  .welcome h2 { font-size: 1.3rem; color: #333; margin-bottom: 0.5rem; }
-  .welcome p { color: #777; font-size: 0.95rem; max-width: 480px; margin: 0 auto; line-height: 1.6; }
+  /* ── Main content area ── */
+  .content { padding: 0 2rem 3rem; }
 
-  /* District header */
-  .district-header { background: #fff; border-radius: 12px; padding: 1.5rem 2rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 1rem; display: none; }
-  .district-header.visible { display: block; }
-  .dh-main { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
-  .dh-name { font-size: 1.6rem; font-weight: 700; }
-  .dh-name .cdc { font-size: 0.8rem; color: #999; font-weight: 400; margin-left: 0.5rem; }
-  .dh-tags { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-  .tag { font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 20px; font-weight: 500; }
-  .tag-rural { background: #e0f7fa; color: #00838f; }
-  .tag-urban { background: #e8eaf6; color: #3949ab; }
-  .tag-charter { background: #fff3e0; color: #e65100; }
-  .tag-region { background: #f3e5f5; color: #7b1fa2; }
-  .dh-stats { display: flex; gap: 2rem; flex-wrap: wrap; margin-top: 1rem; }
-  .dh-stat { text-align: center; }
-  .dh-stat .num { font-size: 1.35rem; font-weight: 700; color: #1a1a2e; }
-  .dh-stat .lbl { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.1rem; }
+  /* ── Section cards ── */
+  .card {
+    background: #fff; border-radius: 10px; padding: 1.5rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 1.25rem;
+  }
+  .card h3 {
+    font-family: Georgia, serif; font-size: 1.05rem; font-weight: 700;
+    color: #14233B; margin-bottom: 1rem; padding-bottom: 0.4rem;
+    border-bottom: 2px solid #C08A2E; display: flex; align-items: center; gap: 0.5rem;
+  }
+  .card h3 .badge {
+    font-size: 0.7rem; background: #14233B; color: #C08A2E;
+    padding: 0.1rem 0.5rem; border-radius: 10px; font-weight: 500; font-family: sans-serif;
+  }
 
-  /* Tab bar */
-  .tabs { display: flex; gap: 0; margin-bottom: 1rem; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-  .tab { flex: 1; padding: 0.8rem 1rem; text-align: center; font-size: 0.85rem; font-weight: 500; cursor: pointer; color: #666; border-bottom: 2px solid transparent; transition: all 0.2s; }
-  .tab:hover { color: #333; background: #fafafa; }
-  .tab.active { color: #2563eb; border-bottom-color: #2563eb; background: #f8faff; }
+  /* ── Cumulative Performance Bar (independent thresholds) ── */
+  .perf-bar-wrap { display: flex; flex-direction: column; gap: 0.75rem; }
+  .perf-bar-set { }
+  .perf-bar-label { font-size: 0.78rem; font-weight: 600; color: #555; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .perf-bar-row { display: flex; align-items: center; gap: 0.6rem; }
+  .perf-bar-label-sm { font-size: 0.72rem; color: #666; min-width: 115px; text-align: right; flex-shrink: 0; }
+  .perf-bar-track { flex: 1; height: 28px; background: #e8e8e8; border-radius: 6px; overflow: hidden; }
+  .perf-bar-fill { height: 100%; border-radius: inherit; transition: width 0.4s ease; }
+  .perf-bar-fill.dnm { background: #C0392B; }
+  .perf-bar-fill.app { background: #E67E22; }
+  .perf-bar-fill.meets { background: #F1C40F; }
+  .perf-bar-fill.mast { background: #27AE60; }
+  .perf-bar-pct { font-size: 0.82rem; font-weight: 700; color: #333; min-width: 45px; text-align: right; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 
-  /* Tab content */
-  .tab-content { display: none; }
-  .tab-content.active { display: block; }
+  .perf-bar-legend { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+  .perf-bar-legend .legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: #555; }
+  .perf-bar-legend .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .perf-bar-legend .legend-swatch.dnm { background: #C0392B; }
+  .perf-bar-legend .legend-swatch.app { background: #E67E22; }
+  .perf-bar-legend .legend-swatch.meets { background: #F1C40F; }
+  .perf-bar-legend .legend-swatch.mast { background: #27AE60; }
 
-  /* Dashboard section */
-  .section { background: #fff; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 1rem; }
-  .section h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #333; display: flex; align-items: center; gap: 0.5rem; }
-  .section h3 .badge { font-size: 0.7rem; background: #e0e7ff; color: #4338ca; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 500; }
+  /* ── Comparison bars row ── */
+  .comparison-row { display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
+  .comparison-row .cmp-label { font-size: 0.78rem; font-weight: 600; color: #555; min-width: 100px; }
+  .comparison-row .cmp-bar { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 2px; }
+  .comparison-row .cmp-pct { font-size: 0.82rem; font-weight: 600; color: #333; min-width: 55px; text-align: right; font-variant-numeric: tabular-nums; }
+  .comparison-row .cmp-delta { font-size: 0.78rem; font-weight: 600; min-width: 60px; text-align: right; }
+  .comparison-row .cmp-delta.pos { color: #27AE60; }
+  .comparison-row .cmp-delta.neg { color: #C0392B; }
+  .comparison-row .cmp-delta.neutral { color: #888; }
 
-  /* Demo bars */
-  .demo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
-  .demo-item { }
-  .demo-item .lbl { font-size: 0.78rem; color: #666; margin-bottom: 0.2rem; }
-  .demo-bar-wrap { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
-  .demo-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
-  .demo-bar.econ { background: linear-gradient(90deg, #f97316, #fb923c); }
-  .demo-bar.ell { background: linear-gradient(90deg, #2563eb, #60a5fa); }
-  .demo-bar.sped { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
-  .demo-bar.atrisk { background: linear-gradient(90deg, #dc2626, #f87171); }
-  .demo-bar.hisp { background: linear-gradient(90deg, #059669, #34d399); }
-  .demo-bar.biling { background: linear-gradient(90deg, #d97706, #fbbf24); }
-  .demo-item .val { font-size: 0.9rem; font-weight: 600; margin-top: 0.25rem; }
+  /* ── ECR section ── */
+  .ecr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 0.3rem; }
+  .ecr-bar-col { text-align: center; }
+  .ecr-bar-col .ecr-label { font-size: 0.7rem; color: #888; margin-top: 0.2rem; }
+  .ecr-bar-col .ecr-bar-wrap { height: 120px; display: flex; align-items: flex-end; justify-content: center; }
+  .ecr-bar-col .ecr-bar {
+    width: 24px; background: linear-gradient(to top, #14233B, #C08A2E); border-radius: 3px 3px 0 0;
+    min-height: 2px; transition: height 0.5s ease;
+  }
+  .ecr-bar-col .ecr-pct { font-size: 0.65rem; color: #555; font-weight: 600; margin-top: 0.15rem; }
 
-  /* Performance table */
-  .perf-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-  .perf-table th { text-align: left; padding: 0.5rem 0.75rem; background: #f9fafb; font-weight: 600; color: #555; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 2px solid #eee; }
-  .perf-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #f0f0f0; }
-  .perf-table tr:hover td { background: #fafbff; }
-  .perf-table .grade-label { font-weight: 600; color: #333; }
-  .perf-table .score { font-weight: 600; }
-  .perf-table .score.above { color: #059669; }
-  .perf-table .score.below { color: #dc2626; }
-  .perf-table .score.neutral { color: #666; }
-  .perf-table .delta { font-size: 0.75rem; margin-left: 0.3rem; }
-  .perf-table .delta.pos { color: #059669; }
-  .perf-table .delta.neg { color: #dc2626; }
-  .num-col { text-align: right; }
-
-  /* Peer list */
-  .peer-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  .peer-table th { text-align: left; padding: 0.4rem 0.6rem; background: #f9fafb; font-weight: 600; color: #555; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 2px solid #eee; }
-  .peer-table td { padding: 0.4rem 0.6rem; border-bottom: 1px solid #f0f0f0; }
-  .peer-table tr:hover td { background: #fafbff; }
-  .peer-table .rank-num { font-weight: 600; color: #888; width: 2rem; text-align: center; }
-  .peer-table .peer-name { font-weight: 500; }
-  .peer-table .peer-name .peer-cdc { font-size: 0.7rem; color: #aaa; margin-left: 0.3rem; }
+  /* ── Peer tables ── */
+  .peer-section { }
+  .peer-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .peer-table th {
+    text-align: left; padding: 0.4rem 0.5rem; background: #F5F0E8;
+    font-weight: 600; color: #14233B; font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.04em; border-bottom: 2px solid #C08A2E;
+  }
+  .peer-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; vertical-align: middle; }
+  .peer-table tr:hover td { background: rgba(192,138,46,0.05); }
+  .peer-table .rank-num { font-weight: 600; color: #888; width: 2rem; text-align: center; font-size: 0.75rem; }
+  .peer-table .peer-name { font-weight: 500; color: #14233B; }
+  .peer-table .peer-name .peer-meta { font-size: 0.65rem; color: #aaa; font-weight: 400; margin-left: 0.3rem; }
   .peer-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-  .peer-table .highlight-row { background: #f0f7ff; }
-  .peer-table .highlight-row td { border-bottom-color: #dbeafe; }
+  .peer-table .peer-highlight-row { background: rgba(192,138,46,0.08); }
+  .peer-table .peer-highlight-row td { border-bottom-color: rgba(192,138,46,0.2); font-weight: 600; }
+  .peer-table .mini-peer-bar {
+    min-width: 80px;
+  }
 
-  /* Summary note */
-  .summary-box { background: #f8faff; border-left: 3px solid #2563eb; border-radius: 0 8px 8px 0; padding: 1rem 1.2rem; margin-top: 1rem; font-size: 0.88rem; color: #333; line-height: 1.6; }
-  .summary-box strong { color: #1a1a2e; }
+  /* ── Loading ── */
+  .loading { text-align: center; padding: 3rem; }
+  .loading .spinner {
+    display: inline-block; width: 36px; height: 36px;
+    border: 3px solid rgba(192,138,46,0.15); border-top-color: #C08A2E;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading p { margin-top: 0.8rem; color: rgba(245,240,232,0.5); font-size: 0.9rem; }
 
-  .empty-state { text-align: center; padding: 2rem; color: #888; font-size: 0.9rem; }
+  .empty-state { text-align: center; padding: 2.5rem; color: rgba(245,240,232,0.4); font-size: 0.9rem; }
 
-  /* Responsive */
-  @media (max-width: 640px) {
-    .header { padding: 1rem 1rem 2.5rem; }
-    .search-wrap { margin-top: -1.2rem; }
-    .dh-stats { gap: 1rem; }
-    .dh-stat .num { font-size: 1.1rem; }
-    .demo-grid { grid-template-columns: repeat(2, 1fr); }
-    .perf-table, .peer-table { font-size: 0.78rem; }
-    .perf-table th, .perf-table td, .peer-table th, .peer-table td { padding: 0.3rem 0.4rem; }
+  /* ── Welcome ── */
+  .welcome {
+    text-align: center; padding: 4rem 1rem;
+  }
+  .welcome h2 { font-family: Georgia, serif; font-size: 1.3rem; color: #C08A2E; margin-bottom: 0.5rem; }
+  .welcome p { color: rgba(245,240,232,0.5); font-size: 0.9rem; max-width: 480px; margin: 0 auto; line-height: 1.6; }
+
+  /* ── Error ── */
+  .error-box {
+    background: rgba(192,57,43,0.1); border-left: 3px solid #C0392B;
+    border-radius: 0 8px 8px 0; padding: 1rem 1.2rem; font-size: 0.88rem; color: #C0392B;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .header { padding: 1.25rem 1rem 1rem; }
+    .header h1 { font-size: 1.3rem; }
+    .search-wrap { padding: 0 1rem 1.25rem; }
+    .controls-bar { padding: 0 1rem 1rem; gap: 0.6rem; }
+    .controls-bar .control-group { width: 100%; }
+    .controls-bar select { flex: 1; min-width: 0; }
+    .district-card { margin: 0 1rem 0.75rem; padding: 1rem; }
+    .dc-stats { gap: 1rem; }
+    .content { padding: 0 1rem 2rem; }
+    .card { padding: 1rem; }
+    .comparison-row { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+    .comparison-row .cmp-label { min-width: 0; }
+    .ecr-grid { grid-template-columns: repeat(6, 1fr); }
+    .peer-table { font-size: 0.72rem; }
+    .peer-table th, .peer-table td { padding: 0.25rem 0.3rem; }
   }
 </style>
 </head>
 <body>
 
+<div class="app-wrap">
+
 <div class="header">
-  <h1>📊 Texas District Dashboard</h1>
-  <p>Search any district to see demographics, peer groups, and performance comparison</p>
+  <h1>Texas School Compass Report</h1>
+  <p>STAAR performance data, peer comparisons, and state benchmarks</p>
+  <div class="subtitle">2025–2026 School Year &middot; Texas Education Agency</div>
 </div>
 
 <div class="search-wrap">
   <div class="search-box">
-    <span class="icon">🔍</span>
+    <span class="icon">&#x1F50D;</span>
     <input type="text" id="search" placeholder="Search a district..." autocomplete="off" spellcheck="false">
     <div class="autocomplete" id="autocomplete"></div>
   </div>
 </div>
 
-<div class="content" id="content">
-  <div class="welcome" id="welcome">
-    <h2>👆 Search for a district to get started</h2>
-    <p>Try typing Farmersville, Highland Park, Dallas, Austin, or Tidehaven to see demographics, peer comparison groups, and STAAR performance data.</p>
+<div class="controls-bar" id="controls" style="display:none;">
+  <div class="control-group">
+    <label for="level-select">Level</label>
+    <select id="level-select">
+      <option value="3-8">Grades 3–8</option>
+      <option value="EOC">EOC</option>
+    </select>
   </div>
-  <div id="dashboard" style="display:none"></div>
+  <div class="control-group">
+    <label for="grade-select">Grade</label>
+    <select id="grade-select"></select>
+  </div>
+  <div class="control-group">
+    <label for="subject-select">Subject</label>
+    <select id="subject-select"></select>
+  </div>
+</div>
+
+<div id="app-content">
+  <div class="welcome" id="welcome">
+    <h2>Search for a district to begin</h2>
+    <p>Type a district name above to view its Compass Report — including STAAR performance, ECR scores, and peer group comparisons.</p>
+  </div>
+</div>
+
 </div>
 
 <script>
-const searchInput = document.getElementById('search');
-const autocomplete = document.getElementById('autocomplete');
-const welcome = document.getElementById('welcome');
-const dashboard = document.getElementById('dashboard');
-
+// ── State ──
+let catalog = null;
+let currentDistrict = null;
 let selectedCDC = null;
 let searchTimeout = null;
 let highlightIndex = -1;
 let searchResults = [];
+
+const searchInput = document.getElementById('search');
+const autocomplete = document.getElementById('autocomplete');
+const welcome = document.getElementById('welcome');
+const appContent = document.getElementById('app-content');
+const controls = document.getElementById('controls');
+const levelSelect = document.getElementById('level-select');
+const gradeSelect = document.getElementById('grade-select');
+const subjectSelect = document.getElementById('subject-select');
+
+// ── Init ──
+(async function init() {
+  try {
+    const res = await fetch('/api/catalog');
+    catalog = await res.json();
+  } catch(e) {
+    console.error('Failed to load catalog:', e);
+  }
+})();
 
 // ── Search ──
 searchInput.addEventListener('input', () => {
@@ -221,14 +336,15 @@ async function fetchSearch(q) {
 function renderAutocomplete(results) {
   autocomplete.innerHTML = '';
   if (!results.length) {
-    autocomplete.innerHTML = '<div class="ac-item" style="color:#999">No districts found</div>';
+    autocomplete.innerHTML = '<div class="ac-item" style="color:rgba(245,240,232,0.4)">No districts found</div>';
     autocomplete.classList.add('open');
     return;
   }
   results.forEach(r => {
     const div = document.createElement('div');
     div.className = 'ac-item';
-    div.innerHTML = `<span class="ac-name">${r.name}</span><span class="ac-meta">${r.county} · ${r.region}</span>`;
+    const regionShort = r.region ? r.region.replace(/^REGION \d+:\s*/, '') : '';
+    div.innerHTML = `<span class="ac-name">${r.name}</span><span class="ac-meta">${r.county || regionShort ? (r.county ? r.county + ' &middot; ' : '') + regionShort : ''}</span>`;
     div.addEventListener('click', () => selectDistrict(r.cdc));
     autocomplete.appendChild(div);
   });
@@ -239,305 +355,519 @@ function renderAutocomplete(results) {
 async function selectDistrict(cdc) {
   autocomplete.classList.remove('open');
   selectedCDC = cdc;
+  controls.style.display = 'flex';
   welcome.style.display = 'none';
-  dashboard.style.display = 'block';
-  dashboard.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top:0.8rem">Loading...</p></div>';
-  
-  // Get info about the district for search bar
+  appContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading district data...</p></div>';
+
+  // Update search bar
   const found = searchResults.find(r => r.cdc === cdc);
   if (found) searchInput.value = found.name;
-  
+
   try {
-    const res = await fetch(`/api/districts/${cdc}`);
-    if (!res.ok) {
-      dashboard.innerHTML = `<div class="empty-state"><h3>District not found</h3><p>CDE: ${cdc}</p></div>`;
-      return;
-    }
-    const data = await res.json();
-    renderDashboard(data);
+    const res = await fetch(`/api/district/${cdc}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    currentDistrict = await res.json();
+    renderFullDashboard(currentDistrict);
   } catch(e) {
-    dashboard.innerHTML = `<div class="empty-state"><h3>Error loading data</h3><p>${e.message}</p></div>`;
+    appContent.innerHTML = `<div class="content"><div class="error-box"><strong>Error loading district data:</strong> ${e.message}</div></div>`;
   }
 }
 
-// ── Dashboard rendering ──
-function renderDashboard(d) {
-  const perf = d.performance?.math || {};
-  const grades = Object.keys(perf).sort();
-  const hasPerf = grades.length > 0;
-  
-  // Get county/region tag
-  const regionShort = d.region ? d.region.replace('REGION ', '') : '';
-  const charterTag = d.charter ? '<span class="tag tag-charter">Charter</span>' : '';
-  
-  // Enrollment display
-  const enrollment = d.enrollment || 0;
-  const enrollDisplay = enrollment >= 1000 ? (enrollment/1000).toFixed(1) + 'K' : enrollment;
+// ── Render Full Dashboard ──
+function renderFullDashboard(d) {
+  populateSelectors(d);
+  renderDashboardContent(d);
+}
 
-  let html = '';
-
-  // ── District header ──
-  html += `<div class="district-header visible">
-    <div class="dh-main">
-      <div class="dh-name">${d.name} <span class="cdc">${d.cdc}</span></div>
-      <div class="dh-tags">
-        <span class="tag tag-region">${regionShort}</span>
-        <span class="tag tag-rural">${d.county} County</span>
-        ${charterTag}
-        ${d.tea_rating ? `<span class="tag" style="background:#fce4ec;color:#c62828">Rating: ${d.tea_rating}</span>` : ''}
-      </div>
-    </div>
-    <div class="dh-stats">
-      <div class="dh-stat"><div class="num">${enrollDisplay}</div><div class="lbl">Enrollment</div></div>
-      <div class="dh-stat"><div class="num">${formatPct(d.econ_disadv_pct)}</div><div class="lbl">Econ Disadv</div></div>
-      <div class="dh-stat"><div class="num">${formatPct(d.eb_el_pct)}</div><div class="lbl">EB/EL</div></div>
-      <div class="dh-stat"><div class="num">${formatPct(d.sped_pct)}</div><div class="lbl">Special Ed</div></div>
-    </div>
-  </div>`;
-
-  // ── Tabs ──
-  html += `<div class="tabs">
-    <div class="tab active" data-tab="demographics">Demographics</div>
-    <div class="tab ${hasPerf ? '' : 'disabled'}" data-tab="performance" style="${hasPerf ? '' : 'color:#ccc;cursor:default'}">Performance</div>
-    <div class="tab" data-tab="demo-peers">Demo Peers</div>
-    <div class="tab" data-tab="geo-peers">Geo Peers</div>
-  </div>`;
-
-  // ── Tab 1: Demographics ──
-  html += `<div class="tab-content active" id="tab-demographics">`;
-  html += `<div class="section">
-    <h3>🏫 Student Profile</h3>
-    <div class="demo-grid">
-      <div class="demo-item">
-        <div class="lbl">Economically Disadvantaged</div>
-        <div class="demo-bar-wrap"><div class="demo-bar econ" style="width:${d.econ_disadv_pct || 0}%"></div></div>
-        <div class="val">${formatPct(d.econ_disadv_pct)}</div>
-      </div>
-      <div class="demo-item">
-        <div class="lbl">Emergent Bilingual / EL</div>
-        <div class="demo-bar-wrap"><div class="demo-bar ell" style="width:${d.eb_el_pct || 0}%"></div></div>
-        <div class="val">${formatPct(d.eb_el_pct)}</div>
-      </div>
-      <div class="demo-item">
-        <div class="lbl">Special Education</div>
-        <div class="demo-bar-wrap"><div class="demo-bar sped" style="width:${d.sped_pct || 0}%"></div></div>
-        <div class="val">${formatPct(d.sped_pct)}</div>
-      </div>
-      <div class="demo-item">
-        <div class="lbl">At-Risk</div>
-        <div class="demo-bar-wrap"><div class="demo-bar atrisk" style="width:${d.at_risk_pct || 0}%"></div></div>
-        <div class="val">${formatPct(d.at_risk_pct)}</div>
-      </div>
-      <div class="demo-item">
-        <div class="lbl">Hispanic</div>
-        <div class="demo-bar-wrap"><div class="demo-bar hisp" style="width:${d.hispanic_pct || 0}%"></div></div>
-        <div class="val">${formatPct(d.hispanic_pct)}</div>
-      </div>
-      <div class="demo-item">
-        <div class="lbl">Bilingual</div>
-        <div class="demo-bar-wrap"><div class="demo-bar biling" style="width:${d.bilingual_pct || 0}%"></div></div>
-        <div class="val">${formatPct(d.bilingual_pct)}</div>
-      </div>
-    </div>
-  </div>`;
-
-  // Ethnicity breakdown
-  html += `<div class="section">
-    <h3>🎨 Ethnicity Breakdown</h3>
-    <div class="demo-grid">
-      <div class="demo-item"><div class="lbl">White</div><div class="demo-bar-wrap"><div class="demo-bar" style="width:${d.white_pct||0}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div><div class="val">${formatPct(d.white_pct)}</div></div>
-      <div class="demo-item"><div class="lbl">Hispanic</div><div class="demo-bar-wrap"><div class="demo-bar" style="width:${d.hispanic_pct||0}%;background:linear-gradient(90deg,#059669,#34d399)"></div></div><div class="val">${formatPct(d.hispanic_pct)}</div></div>
-      <div class="demo-item"><div class="lbl">Black</div><div class="demo-bar-wrap"><div class="demo-bar" style="width:${d.black_pct||0}%;background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div></div><div class="val">${formatPct(d.black_pct)}</div></div>
-      <div class="demo-item"><div class="lbl">Asian</div><div class="demo-bar-wrap"><div class="demo-bar" style="width:${d.asian_pct||0}%;background:linear-gradient(90deg,#0891b2,#22d3ee)"></div></div><div class="val">${formatPct(d.asian_pct)}</div></div>
-      <div class="demo-item"><div class="lbl">Two or More</div><div class="demo-bar-wrap"><div class="demo-bar" style="width:${d.two_or_more_pct||0}%;background:linear-gradient(90deg,#d97706,#fbbf24)"></div></div><div class="val">${formatPct(d.two_or_more_pct)}</div></div>
-    </div>
-  </div>`;
-
-  html += `</div>`;
-
-  // ── Tab 2: Performance ──
-  html += `<div class="tab-content" id="tab-performance">`;
-  if (hasPerf) {
-    html += `<div class="section">
-      <h3>🧮 STAAR Math Performance (2024-25)</h3>
-      <table class="perf-table">
-        <thead><tr><th>Grade</th><th class="num-col">% Approaches+</th><th class="num-col">% Meets+</th><th class="num-col">% Masters</th></tr></thead>
-        <tbody>`;
-
-    grades.forEach(g => {
-      const p = perf[g];
-      const app = p.app != null ? p.app.toFixed(1) + '%' : '—';
-      const meets = p.meets != null ? p.meets.toFixed(1) + '%' : '—';
-      const mast = p.mast != null ? p.mast.toFixed(1) + '%' : '—';
-
-      // Compare vs demo peers
-      const demoAvg = d.demo_avg?.[g];
-      const geoAvg = d.geo_avg?.[g];
-      
-      const appDelta = (demoAvg && p.app != null) ? p.app - demoAvg.app : null;
-      const meetsDelta = (demoAvg && p.meets != null) ? p.meets - demoAvg.meets : null;
-
-      html += `<tr>
-        <td class="grade-label">Grade ${g}</td>
-        <td class="num-col score ${appDelta > 0 ? 'above' : appDelta < 0 ? 'below' : 'neutral'}">
-          ${app}
-          ${appDelta !== null ? `<span class="delta ${appDelta > 0 ? 'pos' : 'neg'}">${appDelta > 0 ? '▲' : '▼'}${Math.abs(appDelta).toFixed(1)}</span>` : ''}
-        </td>
-        <td class="num-col score ${meetsDelta > 0 ? 'above' : meetsDelta < 0 ? 'below' : 'neutral'}">
-          ${meets}
-          ${meetsDelta !== null ? `<span class="delta ${meetsDelta > 0 ? 'pos' : 'neg'}">${meetsDelta > 0 ? '▲' : '▼'}${Math.abs(meetsDelta).toFixed(1)}</span>` : ''}
-        </td>
-        <td class="num-col">${mast}</td>
-      </tr>`;
-    });
-
-    html += `</tbody></table>`;
-    html += `<div class="summary-box">📊 Values shown vs. <strong>demographic peer average</strong>. Green ▲ = above peer average, Red ▼ = below peer average.</div>`;
-    html += `</div>`;
+function getPerformanceForSelectors(d, level, grade, subject) {
+  if (level === 'EOC') {
+    const subjData = (d.eoc || {})[subject];
+    if (!subjData) return null;
+    return {
+      tests_taken: subjData.tests_taken,
+      avg_scale: subjData.avg_scale,
+      dnm_pct: subjData.dnm_pct,
+      app_pct: subjData.app_pct,
+      meets_pct: subjData.meets_pct,
+      mast_pct: subjData.mast_pct
+    };
   } else {
-    html += `<div class="empty-state"><p>No TAPR performance data available for this district</p></div>`;
+    const gradeData = (d.grades_3_8 || {})[grade];
+    if (!gradeData) return null;
+    const subjData = gradeData[subject];
+    if (!subjData) return null;
+    return {
+      tests_taken: subjData.tests_taken,
+      avg_scale: subjData.avg_scale,
+      dnm_pct: subjData.dnm_pct,
+      app_pct: subjData.app_pct,
+      meets_pct: subjData.meets_pct,
+      mast_pct: subjData.mast_pct
+    };
   }
-  html += `</div>`;
+}
 
-  // ── Tab 3: Demo Peers ──
-  html += `<div class="tab-content" id="tab-demo-peers">`;
-  renderPeersTab(html, 'demo', d);
-  html = html.replace('RENDER_PEERS_DEMO', '');
-  // Actually, let me use a function approach instead
-  html += `</div>`;
+function getECRForGrade(d, grade, level) {
+  // ECR is per-grade for 3-8, per-subject for EOC
+  if (level === 'EOC') return null;
+  return (d.ecr || {})[grade] || null;
+}
 
-  // ── Tab 4: Geo Peers ──
-  html += `<div class="tab-content" id="tab-geo-peers">`;
-  renderPeersTab(html, 'geo', d);
-  html = html.replace('RENDER_PEERS_GEO', '');
-  html += `</div>`;
+function populateSelectors(d) {
+  const level = levelSelect.value;
 
-  dashboard.innerHTML = html;
+  // Populate grades based on level
+  gradeSelect.innerHTML = '';
+  subjectSelect.innerHTML = '';
 
-  // Now add peer data via separate renders
-  const demoPeersEl = document.getElementById('tab-demo-peers');
-  if (demoPeersEl) {
-    demoPeersEl.innerHTML = buildPeersSection('demographic', d.demo_peers, d.demo_avg, perf);
-  }
-  const geoPeersEl = document.getElementById('tab-geo-peers');
-  if (geoPeersEl) {
-    geoPeersEl.innerHTML = buildPeersSection('geographic', d.geo_peers, d.geo_avg, perf);
-  }
+  if (level === 'EOC') {
+    // EOC mode: no grade selector, subjects from eoc
+    const gradeOption = document.createElement('option');
+    gradeOption.value = 'EOC';
+    gradeOption.textContent = 'EOC';
+    gradeSelect.appendChild(gradeOption);
+    gradeSelect.disabled = true;
 
-  // ── Tab switching ──
-  document.querySelectorAll('.tabs .tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      if (tab.style.cursor === 'default') return;
-      document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
-      tab.classList.add('active');
-      const target = document.getElementById('tab-' + tab.dataset.tab);
-      if (target) target.classList.add('active');
+    const eocSubjects = catalog.eoc || [];
+    eocSubjects.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      subjectSelect.appendChild(opt);
     });
+  } else {
+    // Grades 3-8 mode
+    gradeSelect.disabled = false;
+    const grades = Object.keys(catalog.grades_3_8 || {}).sort((a,b) => parseInt(a) - parseInt(b));
+    grades.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = `Grade ${g}`;
+      gradeSelect.appendChild(opt);
+    });
+
+    // Set initial grade and populate subjects
+    updateSubjectsForGrade();
+  }
+
+  // Restore or set first subject
+  if (subjectSelect.options.length > 0) {
+    subjectSelect.selectedIndex = 0;
+  }
+
+  // Trigger render
+  renderDashboardContent(d);
+}
+
+function updateSubjectsForGrade() {
+  const grade = gradeSelect.value;
+  const subjects = (catalog.grades_3_8 || {})[grade] || [];
+  subjectSelect.innerHTML = '';
+  subjects.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    subjectSelect.appendChild(opt);
   });
 }
 
-function renderPeersTab(baseHtml, type, d) {
-  // Placeholder — we'll replace content directly
-}
+// ── Selector change events ──
+levelSelect.addEventListener('change', () => {
+  if (!currentDistrict) return;
+  populateSelectors(currentDistrict);
+});
 
-function buildPeersSection(type, peers, avg, districtPerf) {
+gradeSelect.addEventListener('change', () => {
+  if (!currentDistrict) return;
+  updateSubjectsForGrade();
+  renderDashboardContent(currentDistrict);
+});
+
+subjectSelect.addEventListener('change', () => {
+  if (!currentDistrict) return;
+  renderDashboardContent(currentDistrict);
+});
+
+// ── Dashboard Content Render ──
+function renderDashboardContent(d) {
+  const level = levelSelect.value;
+  const grade = gradeSelect.value;
+  const subject = subjectSelect.value;
+
+  if (!subject || !grade) return;
+
+  const perf = getPerformanceForSelectors(d, level, grade, subject);
+  const ecrData = getECRForGrade(d, grade, level);
+  const hasECR = ecrData && ecrData.valid_n > 0;
+
   let html = '';
-  if (!peers || peers.length === 0) {
-    return `<div class="empty-state"><p>No ${type} peer data available</p></div>`;
+
+  // ── District Header ──
+  html += buildDistrictHeader(d);
+
+  // ── Performance Section ──
+  html += `<div class="content">`;
+  html += buildPerformanceSection(d, level, grade, subject, perf);
+  
+  // ── ECR Section ──
+  if (hasECR) {
+    html += buildECRSection(ecrData, grade, subject);
   }
 
-  const label = type === 'demographic' ? 'Demographic Similarity' : 'Geographic Proximity';
-  const scoreLabel = type === 'demographic' ? 'Similarity Score' : 'Distance (mi)';
+  // ── Peer Comparison Sections ──
+  html += buildPeerComparison(d, level, grade, subject, perf);
 
-  html += `<div class="section">
-    <h3>🗺️ ${label} Peers <span class="badge">Top 20</span></h3>
+  html += `</div>`;
+
+  appContent.innerHTML = html;
+}
+
+function buildDistrictHeader(d) {
+  const regionShort = d.region ? d.region.replace(/^REGION \d+:\s*/, '') : '';
+  const enroll = d.enrollment || 0;
+  const enrollDisp = enroll >= 1000 ? (enroll/1000).toFixed(1) + 'K' : enroll;
+
+  return `
+  <div class="district-card">
+    <div class="dc-name">${d.name} <span class="dc-cdc">${d.cdc}</span></div>
+    <div class="dc-meta">
+      <span class="dc-meta-item"><strong>Region:</strong> ${regionShort || '—'}</span>
+      <span class="dc-meta-item"><strong>County:</strong> ${d.county || '—'}</span>
+    </div>
+    <div class="dc-stats">
+      <div class="dc-stat"><div class="num">${enrollDisp}</div><div class="lbl">Enrollment</div></div>
+      <div class="dc-stat"><div class="num">${fmtPct(d.econ_disadv_pct)}</div><div class="lbl">Econ Disadv</div></div>
+      <div class="dc-stat"><div class="num">${fmtPct(d.eb_el_pct)}</div><div class="lbl">EB/EL</div></div>
+      <div class="dc-stat"><div class="num">${fmtPct(d.sped_pct)}</div><div class="lbl">Special Ed</div></div>
+    </div>
+  </div>`;
+}
+
+function buildPerformanceSection(d, level, grade, subject, perf) {
+  const label = level === 'EOC' ? `${subject} (EOC)` : `Grade ${grade} ${subject}`;
+  
+  if (!perf) {
+    return `<div class="card"><h3>${label}</h3><p style="color:#888;font-size:0.88rem;">No performance data available for this selection.</p></div>`;
+  }
+
+  // Calculate bar segments — cumulative (not exclusive)
+  const dnm = perf.dnm_pct || 0;
+  const app = perf.app_pct || 0;
+  const meets = perf.meets_pct || 0;
+  const mast = perf.mast_pct || 0;
+
+  let html = `<div class="card">
+    <h3>STAAR Performance: ${label} <span class="badge">${perf.tests_taken} tests</span></h3>
+    <div class="perf-bar-wrap">`;
+
+  // ── Main performance bars — 4 independent cumulative rows ──
+  html += `<div class="perf-bar-set">
+    <div class="perf-bar-label">${d.name}</div>`;
+  html += `<div class="perf-bar-row">
+      <div class="perf-bar-label-sm">Did Not Meet</div>
+      <div class="perf-bar-track"><div class="perf-bar-fill dnm" style="width:${dnm}%"></div></div>
+      <div class="perf-bar-pct">${dnm.toFixed(0)}%</div>
+    </div>`;
+  html += `<div class="perf-bar-row">
+      <div class="perf-bar-label-sm">Approaches or Above</div>
+      <div class="perf-bar-track"><div class="perf-bar-fill app" style="width:${app}%"></div></div>
+      <div class="perf-bar-pct">${app.toFixed(0)}%</div>
+    </div>`;
+  html += `<div class="perf-bar-row">
+      <div class="perf-bar-label-sm">Meets or Above</div>
+      <div class="perf-bar-track"><div class="perf-bar-fill meets" style="width:${meets}%"></div></div>
+      <div class="perf-bar-pct">${meets.toFixed(0)}%</div>
+    </div>`;
+  html += `<div class="perf-bar-row">
+      <div class="perf-bar-label-sm">Masters</div>
+      <div class="perf-bar-track"><div class="perf-bar-fill mast" style="width:${mast}%"></div></div>
+      <div class="perf-bar-pct">${mast.toFixed(0)}%</div>
+    </div>`;
+  html += `<div class="perf-bar-legend">
+      <span class="legend-item"><span class="legend-swatch dnm"></span>Did Not Meet (${dnm.toFixed(0)}%)</span>
+      <span class="legend-item"><span class="legend-swatch app"></span>Approaches or Above (${app.toFixed(0)}%)</span>
+      <span class="legend-item"><span class="legend-swatch meets"></span>Meets or Above (${meets.toFixed(0)}%)</span>
+      <span class="legend-item"><span class="legend-swatch mast"></span>Masters (${mast.toFixed(0)}%)</span>
+    </div>
+  </div>`;
+
+  // ── State/Region benchmarks ──
+  html += `<div class="benchmark-section">`;
+
+  // Fetch benchmarks
+  const _this = this;
+  // We'll fetch benchmarks async and inject
+  html += `<div id="benchmarks-container">Loading benchmarks...</div>`;
+
+  html += `</div></div></div>`;
+
+  // Store perf for async use
+  const _perf = perf;
+  // Fetch benchmarks async
+  fetchBenchmarks(d, _perf, level, grade, subject)
+    .then(benchHtml => {
+      const el = document.getElementById('benchmarks-container');
+      if (el) el.innerHTML = benchHtml;
+    });
+
+  return html;
+}
+
+async function fetchBenchmarks(d, perf, level, grade, subject) {
+  try {
+    const gradeParam = level === 'EOC' ? 'EOC' : grade;
+    const region = d.region || '';
+    const url = `/api/benchmark/${encodeURIComponent(subject)}/${gradeParam}${region ? '?region=' + encodeURIComponent(region) : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Benchmark fetch failed');
+    const bench = await res.json();
+
+    let html = '';
+
+    // State benchmark bar
+    if (bench.state) {
+      const s = bench.state;
+      const sDnm = s.dnm_pct || 0;
+      const sApp = s.app_pct || 0;
+      const sMeets = s.meets_pct || 0;
+      const sMast = s.mast_pct || 0;
+
+      const meetsPlus = (perf.meets_pct || 0);
+      const sMeetsPlus = s.meets_pct || 0;
+      const meetsDelta = meetsPlus - sMeetsPlus;
+
+      html += buildComparisonBar('State Average', sDnm, sApp, sMeets, sMast, meetsDelta, sMeetsPlus);
+    }
+
+    // Region benchmark bar
+    if (bench.region) {
+      const r = bench.region;
+      const rDnm = r.dnm_pct || 0;
+      const rApp = r.app_pct || 0;
+      const rMeets = r.meets_pct || 0;
+      const rMast = r.mast_pct || 0;
+      const regionShort = d.region ? d.region.replace(/^REGION \d+:\s*/, '') : d.region;
+
+      const meetsPlus = (perf.meets_pct || 0);
+      const rMeetsPlus = r.meets_pct || 0;
+      const meetsDelta = meetsPlus - rMeetsPlus;
+
+      html += buildComparisonBar(regionShort + ' Average', rDnm, rApp, rMeets, rMast, meetsDelta, rMeetsPlus);
+    }
+
+    return html;
+  } catch(e) {
+    return `<p style="color:#888;font-size:0.82rem;">Could not load benchmark data.</p>`;
+  }
+}
+
+function buildComparisonBar(label, dnm, app, meets, mast, meetsDelta, meetsPlus) {
+  const deltaClass = meetsDelta > 1 ? 'pos' : meetsDelta < -1 ? 'neg' : 'neutral';
+  const deltaSign = meetsDelta > 0 ? '▲' : meetsDelta < 0 ? '▼' : '—';
+  const deltaVal = Math.abs(meetsDelta).toFixed(1);
+
+  return `<div class="comparison-row">
+    <div class="cmp-label">${label}</div>
+    <div class="cmp-bar">
+      <div class="perf-bar-row">
+        <div class="perf-bar-track"><div class="perf-bar-fill dnm" style="width:${dnm}%;height:16px;"></div></div>
+      </div>
+      <div class="perf-bar-row">
+        <div class="perf-bar-track"><div class="perf-bar-fill app" style="width:${app}%;height:16px;"></div></div>
+      </div>
+      <div class="perf-bar-row">
+        <div class="perf-bar-track"><div class="perf-bar-fill meets" style="width:${meets}%;height:16px;"></div></div>
+      </div>
+      <div class="perf-bar-row">
+        <div class="perf-bar-track"><div class="perf-bar-fill mast" style="width:${mast}%;height:16px;"></div></div>
+      </div>
+    </div>
+    <div class="cmp-pct">${meetsPlus.toFixed(0)}% Meets+</div>
+    <div class="cmp-delta ${deltaClass}">${deltaSign} ${deltaVal}pp</div>
+  </div>`;
+}
+
+function buildECRSection(ecrData, grade, subject) {
+  let html = `<div class="card">
+    <h3>Extended Constructed Response (ECR) — Grade ${grade} <span class="badge">${ecrData.valid_n} papers</span></h3>
+    <p style="font-size:0.8rem;color:#888;margin-bottom:0.8rem;">Distribution of ECR scores (0–10) for this grade level</p>
+    <div class="ecr-grid">`;
+
+  const ratings = ecrData.ratings || {};
+  const maxPct = Math.max(...Object.values(ratings), 1);
+
+  for (let i = 0; i <= 10; i++) {
+    const pct = ratings[String(i)] || 0;
+    const barH = (pct / maxPct) * 100;
+    html += `<div class="ecr-bar-col">
+      <div class="ecr-bar-wrap">
+        <div class="ecr-bar" style="height:${Math.max(barH, 4)}%"></div>
+      </div>
+      <div class="ecr-pct">${pct.toFixed(0)}%</div>
+      <div class="ecr-label">${i}</div>
+    </div>`;
+  }
+
+  html += `</div></div>`;
+  return html;
+}
+
+function buildPeerComparison(d, level, grade, subject, perf) {
+  let html = '';
+
+  // ── Demo Peers ──
+  html += buildPeerTable('Demographically Similar Districts', 'demo', d, level, grade, subject, perf);
+  // ── Geo Peers ──
+  html += buildPeerTable('Geographically Neighboring Districts', 'geo', d, level, grade, subject, perf);
+
+  return html;
+}
+
+function buildPeerTable(title, type, d, level, grade, subject, perf) {
+  const peers = type === 'demo' ? (d.demo_peers || []) : (d.geo_peers || []);
+  if (!peers.length) return '';
+
+  const scoreLabel = type === 'demo' ? 'Similarity' : 'Distance';
+
+  // Compute peer average for meets_pct
+  let peerMeetsSum = 0, peerCount = 0;
+  peers.forEach(p => {
+    const pData = getPerformanceForSelectors(p, level, grade, subject);
+    if (pData && pData.meets_pct != null) {
+      peerMeetsSum += pData.meets_pct;
+      peerCount++;
+    }
+  });
+  const peerAvgMeets = peerCount > 0 ? (peerMeetsSum / peerCount) : null;
+  const districtMeets = perf ? perf.meets_pct : null;
+  const vsPeerDelta = (districtMeets != null && peerAvgMeets != null) ? districtMeets - peerAvgMeets : null;
+  const vsPeerClass = vsPeerDelta > 1 ? 'pos' : vsPeerDelta < -1 ? 'neg' : 'neutral';
+  const vsPeerArrow = vsPeerDelta > 0 ? '▲' : vsPeerDelta < 0 ? '▼' : '—';
+
+  // Compute peer averages for the stacked bar components
+  let peerDnmSum = 0, peerAppSum = 0, peerMeetsSum_ = 0, peerMastSum = 0;
+  peers.forEach(p => {
+    const pData = getPerformanceForSelectors(p, level, grade, subject);
+    if (pData) {
+      peerDnmSum += pData.dnm_pct || 0;
+      peerAppSum += pData.app_pct || 0;
+      peerMeetsSum_ += pData.meets_pct || 0;
+      peerMastSum += pData.mast_pct || 0;
+    }
+  });
+  const pc = peerCount || 1;
+
+  let html = `<div class="card peer-section">
+    <h3>${title} <span class="badge">Top ${peers.length}</span></h3>
+    ${vsPeerDelta != null ? `<p style="font-size:0.82rem;color:#555;margin-bottom:0.75rem;">
+      <strong>${d.name}</strong> Meets+ rate: <strong>${districtMeets.toFixed(0)}%</strong> — 
+      <span class="cmp-delta ${vsPeerClass}">${vsPeerArrow} ${Math.abs(vsPeerDelta).toFixed(1)}pp ${vsPeerDelta > 0 ? 'above' : 'below'}</span> 
+      peer group average (${peerAvgMeets.toFixed(1)}%)
+    </p>` : ''}
     <div style="overflow-x:auto">
     <table class="peer-table">
       <thead>
         <tr>
-          <th>#</th>
+          <th style="width:2.2rem">#</th>
           <th>District</th>
-          <th class="num">${scoreLabel}</th>
-          <th class="num">Enroll</th>
-          <th class="num">Econ%</th>
-          <th class="num">EB/EL%</th>
-          <th class="num">Gr3 App+</th>
-          <th class="num">Gr4 App+</th>
-          <th class="num">Gr5 App+</th>
+          <th style="width:50px" class="num">${scoreLabel}</th>
+          <th style="width:140px">Perf.</th>
+          <th style="width:55px" class="num">Meets+</th>
+          <th style="width:55px" class="num">vs ${d.name}</th>
+          <th style="width:45px" class="num">Enroll</th>
+          <th style="width:45px" class="num">Econ%</th>
         </tr>
       </thead>
       <tbody>`;
 
   peers.forEach(p => {
-    const pPerf = p.performance?.math || {};
-    const gr3 = pPerf[3]?.app;
-    const gr4 = pPerf[4]?.app;
-    const gr5 = pPerf[5]?.app;
-    const score = type === 'demographic' ? p.score.toFixed(4) : p.dist_mi.toFixed(0) + ' mi';
+    const pData = getPerformanceForSelectors(p, level, grade, subject);
+    const pMeets = pData ? pData.meets_pct : null;
+    const score = type === 'demo' ? p.score.toFixed(3) : (p.dist_mi ? p.dist_mi.toFixed(0) + 'mi' : '—');
     
+    // Mini bar for peer — 4 independent cumulative bars
+    let miniBarHtml = '<div class="mini-peer-bar">';
+    if (pData) {
+      const pDnm = pData.dnm_pct || 0;
+      const pApp = pData.app_pct || 0;
+      const pMeets = pData.meets_pct || 0;
+      const pMast = pData.mast_pct || 0;
+      miniBarHtml += `<div style="display:flex;flex-direction:column;gap:2px;width:100%;">`;
+      miniBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pDnm}%;background:#C0392B;border-radius:2px;"></div></div>`;
+      miniBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pApp}%;background:#E67E22;border-radius:2px;"></div></div>`;
+      miniBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pMeets}%;background:#F1C40F;border-radius:2px;"></div></div>`;
+      miniBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pMast}%;background:#27AE60;border-radius:2px;"></div></div>`;
+      miniBarHtml += '</div>';
+    }
+    miniBarHtml += '</div>';
+
+    const pDelta = (districtMeets != null && pMeets != null) ? districtMeets - pMeets : null;
+    const pDeltaClass = pDelta > 1 ? 'pos' : pDelta < -1 ? 'neg' : 'neutral';
+    const pDeltaSign = pDelta > 0 ? '▲' : pDelta < 0 ? '▼' : '—';
+
     html += `<tr>
-      <td class="rank-num">${p.rank}</td>
-      <td class="peer-name">${p.name} <span class="peer-cdc">${p.cdc}</span></td>
-      <td class="num">${score}</td>
-      <td class="num">${p.enrollment || '—'}</td>
-      <td class="num">${p.econ_disadv_pct != null ? p.econ_disadv_pct.toFixed(0) + '%' : '—'}</td>
-      <td class="num">${p.eb_el_pct != null ? p.eb_el_pct.toFixed(0) + '%' : '—'}</td>
-      <td class="num">${gr3 != null ? gr3.toFixed(0) + '%' : '—'}</td>
-      <td class="num">${gr4 != null ? gr4.toFixed(0) + '%' : '—'}</td>
-      <td class="num">${gr5 != null ? gr5.toFixed(0) + '%' : '—'}</td>
+      <td class="rank-num">${p.rank || '—'}</td>
+      <td class="peer-name">
+        ${p.name}
+        <span class="peer-meta">${p.cdc}</span>
+      </td>
+      <td class="num" style="font-size:0.75rem;color:#888;">${score}</td>
+      <td>${miniBarHtml}</td>
+      <td class="num">${pMeets != null ? pMeets.toFixed(0) + '%' : '—'}</td>
+      <td class="num"><span class="cmp-delta ${pDeltaClass}" style="font-size:0.75rem;">${pDelta != null ? `${pDeltaSign} ${Math.abs(pDelta).toFixed(0)}pp` : '—'}</span></td>
+      <td class="num" style="font-size:0.75rem;color:#888;">${p.enrollment || '—'}</td>
+      <td class="num" style="font-size:0.75rem;color:#888;">${p.econ_disadv_pct != null ? p.econ_disadv_pct.toFixed(0) : '—'}</td>
     </tr>`;
   });
 
-  // Peer averages row
-  html += `<tr class="highlight-row">
+  // Peer average row — 4 independent cumulative bars
+  const avgDnm = peerDnmSum / pc;
+  const avgApp = peerAppSum / pc;
+  const avgMeets = peerMeetsSum_ / pc;
+  const avgMast = peerMastSum / pc;
+  let avgBarHtml = '<div class="mini-peer-bar">';
+  avgBarHtml += `<div style="display:flex;flex-direction:column;gap:2px;width:100%;">`;
+  avgBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${avgDnm}%;background:#C0392B;border-radius:2px;"></div></div>`;
+  avgBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${avgApp}%;background:#E67E22;border-radius:2px;"></div></div>`;
+  avgBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${avgMeets}%;background:#F1C40F;border-radius:2px;"></div></div>`;
+  avgBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${avgMast}%;background:#27AE60;border-radius:2px;"></div></div>`;
+  avgBarHtml += '</div>';
+  avgBarHtml += '</div>';
+
+  html += `<tr class="peer-highlight-row">
     <td class="rank-num">—</td>
-    <td class="peer-name"><strong>Peer Average</strong></td>
+    <td class="peer-name">Peer Group Average</td>
+    <td class="num">—</td>
+    <td>${avgBarHtml}</td>
+    <td class="num">${peerAvgMeets != null ? peerAvgMeets.toFixed(1) + '%' : '—'}</td>
+    <td class="num"><span class="cmp-delta ${vsPeerClass}">${vsPeerArrow} ${Math.abs(vsPeerDelta).toFixed(1)}pp</span></td>
     <td class="num">—</td>
     <td class="num">—</td>
-    <td class="num">—</td>
-    <td class="num">—</td>
-    <td class="num"><strong>${avg?.[3]?.app != null ? avg[3].app.toFixed(1) + '%' : '—'}</strong></td>
-    <td class="num"><strong>${avg?.[4]?.app != null ? avg[4].app.toFixed(1) + '%' : '—'}</strong></td>
-    <td class="num"><strong>${avg?.[5]?.app != null ? avg[5].app.toFixed(1) + '%' : '—'}</strong></td>
   </tr>`;
 
-  html += `</tbody></table></div>`;
-
-  // Summary vs peers
-  const grades = Object.keys(districtPerf || {}).sort();
-  if (grades.length > 0) {
-    html += `<div class="summary-box">`;
-    grades.forEach(g => {
-      const dP = districtPerf[g];
-      const a = avg?.[g];
-      if (dP && a && dP.app != null && a.app != null) {
-        const delta = dP.app - a.app;
-        const dir = delta > 0 ? 'ahead of' : delta < 0 ? 'behind' : 'aligned with';
-        html += `📌 <strong>Grade ${g}:</strong> ${dP.app.toFixed(0)}% App+ — <strong>${Math.abs(delta).toFixed(1)} points ${dir}</strong> the ${type} peer average (${a.app.toFixed(1)}%).<br>`;
-      }
-    });
-    html += `</div>`;
-  }
-
-  html += `</div>`;
+  html += `</tbody></table></div></div>`;
   return html;
 }
 
-function formatPct(val) {
-  if (val == null) return '—';
-  return val.toFixed(1) + '%';
+function getPerformanceForSelectors(d, level, grade, subject) {
+  if (!d) return null;
+  if (level === 'EOC') {
+    const subjData = (d.eoc || {})[subject];
+    if (!subjData || !subjData.tests_taken) return null;
+    return subjData;
+  } else {
+    const gradeData = (d.grades_3_8 || {})[grade];
+    if (!gradeData) return null;
+    const subjData = gradeData[subject];
+    if (!subjData || !subjData.tests_taken) return null;
+    return subjData;
+  }
 }
 
-// ── Load on Enter if CDC is in URL hash ──
-window.addEventListener('DOMContentLoaded', () => {
-  if (window.location.hash) {
-    const cdc = window.location.hash.replace('#', '');
-    if (cdc.length === 6) {
-      fetchSearch(cdc).then(() => selectDistrict(cdc));
-    }
-  }
-});
+function fmtPct(val) {
+  if (val == null || isNaN(val)) return '—';
+  return val.toFixed(1) + '%';
+}
 </script>
 </body>
 </html>
