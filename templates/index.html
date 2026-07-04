@@ -192,9 +192,6 @@
   .peer-table .num { text-align: right; font-variant-numeric: tabular-nums; }
   .peer-table .peer-highlight-row { background: rgba(192,138,46,0.08); }
   .peer-table .peer-highlight-row td { border-bottom-color: rgba(192,138,46,0.2); font-weight: 600; }
-  .peer-table .mini-peer-bar {
-    min-width: 80px;
-  }
 
   /* ── Loading ── */
   .loading { text-align: center; padding: 3rem; }
@@ -240,10 +237,10 @@
     .ecr-pct { font-size: 0.6rem; }
     .peer-table { font-size: 0.72rem; }
     .peer-table th, .peer-table td { padding: 0.25rem 0.3rem; }
-    .peer-table th:nth-child(6),
     .peer-table th:nth-child(7),
-    .peer-table td:nth-child(6),
-    .peer-table td:nth-child(7) { display: none; }
+    .peer-table th:nth-child(8),
+    .peer-table td:nth-child(7),
+    .peer-table td:nth-child(8) { display: none; }
   }
 
   @media (max-width: 480px) {
@@ -273,12 +270,12 @@
     .cmp-table .cmp-cat { font-size: 0.68rem; }
     .peer-table { font-size: 0.65rem; }
     .peer-table th, .peer-table td { padding: 0.2rem 0.2rem; }
-    .peer-table th:nth-child(5),
     .peer-table th:nth-child(6),
     .peer-table th:nth-child(7),
-    .peer-table td:nth-child(5),
+    .peer-table th:nth-child(8),
     .peer-table td:nth-child(6),
-    .peer-table td:nth-child(7) { display: none; }
+    .peer-table td:nth-child(7),
+    .peer-table td:nth-child(8) { display: none; }
     .peer-table .peer-name .peer-meta { display: none; }
   }
 </style>
@@ -787,141 +784,123 @@ function buildPeerTable(title, type, d, level, grade, subject, perf) {
   let peers = type === 'demo' ? (d.demo_peers || []) : (d.geo_peers || []);
   if (!peers.length) return '';
   const sortState = peerSort[type];
-  peers = sortPeers(peers, sortState.by, sortState.dir, level, grade, subject);
-
-  // Compute peer average for meets_pct
-  let peerMeetsSum = 0, peerCount = 0;
-  peers.forEach(p => {
-    const pData = getPerformanceForSelectors(p, level, grade, subject);
-    if (pData && pData.meets_pct != null) {
-      peerMeetsSum += pData.meets_pct;
-      peerCount++;
-    }
-  });
-  const peerAvgMeets = peerCount > 0 ? (peerMeetsSum / peerCount) : null;
   const districtMeets = perf ? perf.meets_pct : null;
-  const vsPeerDelta = (districtMeets != null && peerAvgMeets != null) ? districtMeets - peerAvgMeets : null;
-  const vsPeerClass = vsPeerDelta > 1 ? 'pos' : vsPeerDelta < -1 ? 'neg' : 'neutral';
-  const vsPeerArrow = vsPeerDelta > 0 ? '▲' : vsPeerDelta < 0 ? '▼' : '—';
 
-  // Compute peer averages for the stacked bar components
-  let peerDnmSum = 0, peerAppSum = 0, peerMeetsSum_ = 0, peerMastSum = 0;
-  peers.forEach(p => {
+  // Build combined list: insert selected district into peers so it sorts in-line
+  const districtAsPeer = {
+    cdc: d.cdc,
+    name: d.name,
+    enrollment: d.enrollment,
+    econ_disadv_pct: d.econ_disadv_pct,
+    _isSelected: true
+  };
+  const combined = [districtAsPeer, ...peers];
+  const sorted = sortPeers(combined, sortState.by, sortState.dir, level, grade, subject, districtMeets);
+
+  // Remove the selected district entry to compute peer-only averages
+  const peerOnly = sorted.filter(p => !p._isSelected);
+  const pc = peerOnly.length;
+
+  // Compute peer averages for App, Meets+, Mast
+  let peerAppSum = 0, peerMeetsSum = 0, peerMastSum = 0;
+  peerOnly.forEach(p => {
     const pData = getPerformanceForSelectors(p, level, grade, subject);
     if (pData) {
-      peerDnmSum += pData.dnm_pct || 0;
       peerAppSum += pData.app_pct || 0;
-      peerMeetsSum_ += pData.meets_pct || 0;
+      peerMeetsSum += pData.meets_pct || 0;
       peerMastSum += pData.mast_pct || 0;
     }
   });
-  const pc = peerCount || 1;
+  const avgApp = pc > 0 ? peerAppSum / pc : null;
+  const avgMeets = pc > 0 ? peerMeetsSum / pc : null;
+  const avgMast = pc > 0 ? peerMastSum / pc : null;
+  const vsPeerDelta = (districtMeets != null && avgMeets != null) ? districtMeets - avgMeets : null;
+  const vsPeerClass = vsPeerDelta > 1 ? 'pos' : vsPeerDelta < -1 ? 'neg' : 'neutral';
+  const vsPeerArrow = vsPeerDelta > 0 ? '▲' : vsPeerDelta < 0 ? '▼' : '—';
+
+  // Sort arrow helper
+  function sortArrow(key) {
+    const active = sortState.by === key;
+    const dir = sortState.dir;
+    const defaultArrow = key === 'name' ? '▲' : '▼';
+    if (!active) return `<span class="sort-arrow inactive">${defaultArrow}</span>`;
+    return `<span class="sort-arrow">${dir === 'asc' ? '▲' : '▼'}</span>`;
+  }
 
   let html = `<div class="card peer-section">
-    <h3>${title} <span class="badge">Top ${peers.length}</span></h3>
+    <h3>${title} <span class="badge">${peers.length} peers</span></h3>
     ${vsPeerDelta != null ? `<p style="font-size:0.82rem;color:#555;margin-bottom:0.75rem;">
       <strong>${d.name}</strong> Meets+ rate: <strong>${districtMeets.toFixed(0)}%</strong> — 
       <span class="cmp-delta ${vsPeerClass}">${vsPeerArrow} ${Math.abs(vsPeerDelta).toFixed(1)}pp ${vsPeerDelta > 0 ? 'above' : 'below'}</span> 
-      peer group average (${peerAvgMeets.toFixed(1)}%)
+      peer group average (${avgMeets.toFixed(1)}%)
     </p>` : ''}
     <div style="overflow-x:auto">
     <table class="peer-table">
       <thead>
         <tr>
-          <th style="width:2.2rem">#</th>
-          <th class="sortable-th" data-sort-key="name" data-table-type="${type}" style="cursor:pointer">
-            District<span class="sort-arrow ${sortState.by === 'name' ? '' : 'inactive'}">${sortState.by === 'name' ? (sortState.dir === 'asc' ? '▲' : '▼') : '▲'}</span>
+          <th style="width:2rem">#</th>
+          <th class="sortable-th" data-sort-key="name" data-table-type="${type}">
+            District${sortArrow('name')}
           </th>
-          <th style="width:140px">Perf.</th>
-          <th style="width:55px" class="num sortable-th" data-sort-key="meets" data-table-type="${type}" style="cursor:pointer">
-            Meets+<span class="sort-arrow ${sortState.by === 'meets' ? '' : 'inactive'}">${sortState.by === 'meets' ? (sortState.dir === 'desc' ? '▼' : '▲') : '▼'}</span>
+          <th style="width:50px" class="num sortable-th" data-sort-key="app" data-table-type="${type}">
+            App${sortArrow('app')}
           </th>
-          <th style="width:55px" class="num">vs ${d.name}</th>
-          <th style="width:45px" class="num">Enroll</th>
-          <th style="width:45px" class="num">Econ%</th>
+          <th style="width:50px" class="num sortable-th" data-sort-key="meets" data-table-type="${type}">
+            Meets+${sortArrow('meets')}
+          </th>
+          <th style="width:50px" class="num sortable-th" data-sort-key="mast" data-table-type="${type}">
+            Mast${sortArrow('mast')}
+          </th>
+          <th style="width:55px" class="num sortable-th" data-sort-key="vs" data-table-type="${type}">
+            vs${sortArrow('vs')}
+          </th>
+          <th style="width:50px" class="num sortable-th" data-sort-key="enroll" data-table-type="${type}">
+            Enroll${sortArrow('enroll')}
+          </th>
+          <th style="width:50px" class="num sortable-th" data-sort-key="econ" data-table-type="${type}">
+            Econ%${sortArrow('econ')}
+          </th>
         </tr>
       </thead>
-      <tbody>
-    <!-- Selected district row -->
-    ${(() => {
-      const dDnm = perf ? (perf.dnm_pct || 0) : 0;
-      const dApp = perf ? (perf.app_pct || 0) : 0;
-      const dMeets = perf ? (perf.meets_pct || 0) : 0;
-      const dMast = perf ? (perf.mast_pct || 0) : 0;
-      return `<tr class="peer-highlight-row">
-        <td class="rank-num">★</td>
-        <td class="peer-name">${d.name} <span class="peer-meta" style="color:#C08A2E;font-weight:600;">(selected)</span></td>
-        <td><div class="mini-peer-bar"><div style="display:flex;flex-direction:column;gap:2px;width:100%;">
-          <div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${dDnm}%;background:#C0392B;border-radius:2px;"></div></div>
-          <div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${dApp}%;background:#E67E22;border-radius:2px;"></div></div>
-          <div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${dMeets}%;background:#F1C40F;border-radius:2px;"></div></div>
-          <div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${dMast}%;background:#27AE60;border-radius:2px;"></div></div>
-        </div></div></td>
-        <td class="num">${dMeets.toFixed(0)}%</td>
-        <td class="num"><span style="color:#888;">—</span></td>
-        <td class="num" style="font-size:0.75rem;color:#888;">${d.enrollment || '—'}</td>
-        <td class="num" style="font-size:0.75rem;color:#888;">${d.econ_disadv_pct != null ? d.econ_disadv_pct.toFixed(0) : '—'}</td>
-      </tr>`;
-    })()}
-    `;
+      <tbody>`;
 
-  peers.forEach(p => {
-    const pData = getPerformanceForSelectors(p, level, grade, subject);
+  // Render sorted combined rows — selected district sorts in-line
+  sorted.forEach((item, idx) => {
+    const isSelected = item._isSelected;
+    const rowClass = isSelected ? ' class="peer-highlight-row"' : '';
+    const rankNum = isSelected ? '★' : (idx + 1);
+    const nameSuffix = isSelected ? ' <span class="peer-meta" style="color:#C08A2E;font-weight:600;">(selected)</span>' : ` <span class="peer-meta">${item.cdc}</span>`;
+
+    const pData = getPerformanceForSelectors(item, level, grade, subject);
+    const pApp = pData ? pData.app_pct : null;
     const pMeets = pData ? pData.meets_pct : null;
-    
-    // Mini bar for peer — 4 independent cumulative bars
-    let miniBarHtml = '<div class="mini-peer-bar">';
-    if (pData) {
-      const pDnm = pData.dnm_pct || 0;
-      const pApp = pData.app_pct || 0;
-      const pMeets = pData.meets_pct || 0;
-      const pMast = pData.mast_pct || 0;
-      miniBarHtml += `<div style="display:flex;flex-direction:column;gap:2px;width:100%;">`;
-      miniBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pDnm}%;background:#C0392B;border-radius:2px;"></div></div>`;
-      miniBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pApp}%;background:#E67E22;border-radius:2px;"></div></div>`;
-      miniBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pMeets}%;background:#F1C40F;border-radius:2px;"></div></div>`;
-      miniBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pMast}%;background:#27AE60;border-radius:2px;"></div></div>`;
-      miniBarHtml += '</div>';
-    }
-    miniBarHtml += '</div>';
+    const pMast = pData ? pData.mast_pct : null;
 
-    const pDelta = (districtMeets != null && pMeets != null) ? districtMeets - pMeets : null;
-    const pDeltaClass = pDelta > 1 ? 'pos' : pDelta < -1 ? 'neg' : 'neutral';
-    const pDeltaSign = pDelta > 0 ? '▲' : pDelta < 0 ? '▼' : '—';
+    const vsDelta = (!isSelected && districtMeets != null && pMeets != null) ? districtMeets - pMeets : null;
+    const vsClass = vsDelta > 1 ? 'pos' : vsDelta < -1 ? 'neg' : 'neutral';
+    const vsSign = vsDelta > 0 ? '▲' : vsDelta < 0 ? '▼' : '—';
+    const vsDisplay = isSelected ? '<span style="color:#888;">—</span>' :
+      (vsDelta != null ? `<span class="cmp-delta ${vsClass}" style="font-size:0.75rem;">${vsSign} ${Math.abs(vsDelta).toFixed(0)}pp</span>` : '<span style="color:#888;">—</span>');
 
-    html += `<tr>
-      <td class="rank-num">${p.rank || '—'}</td>
-      <td class="peer-name">
-        ${p.name}
-        <span class="peer-meta">${p.cdc}</span>
-      </td>
-      <td>${miniBarHtml}</td>
+    html += `<tr${rowClass}>
+      <td class="rank-num">${rankNum}</td>
+      <td class="peer-name">${item.name}${nameSuffix}</td>
+      <td class="num">${pApp != null ? pApp.toFixed(0) + '%' : '—'}</td>
       <td class="num">${pMeets != null ? pMeets.toFixed(0) + '%' : '—'}</td>
-      <td class="num"><span class="cmp-delta ${pDeltaClass}" style="font-size:0.75rem;">${pDelta != null ? `${pDeltaSign} ${Math.abs(pDelta).toFixed(0)}pp` : '—'}</span></td>
-      <td class="num" style="font-size:0.75rem;color:#888;">${p.enrollment || '—'}</td>
-      <td class="num" style="font-size:0.75rem;color:#888;">${p.econ_disadv_pct != null ? p.econ_disadv_pct.toFixed(0) : '—'}</td>
+      <td class="num">${pMast != null ? pMast.toFixed(0) + '%' : '—'}</td>
+      <td class="num">${vsDisplay}</td>
+      <td class="num" style="font-size:0.75rem;color:#888;">${item.enrollment || '—'}</td>
+      <td class="num" style="font-size:0.75rem;color:#888;">${item.econ_disadv_pct != null ? item.econ_disadv_pct.toFixed(0) : '—'}</td>
     </tr>`;
   });
 
-  // Peer average row — 4 independent cumulative bars
-  const avgDnm = peerDnmSum / pc;
-  const avgApp = peerAppSum / pc;
-  const avgMeets = peerMeetsSum_ / pc;
-  const avgMast = peerMastSum / pc;
-  let avgBarHtml = '<div class="mini-peer-bar">';
-  avgBarHtml += `<div style="display:flex;flex-direction:column;gap:2px;width:100%;">`;
-  avgBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${avgDnm}%;background:#C0392B;border-radius:2px;"></div></div>`;
-  avgBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${avgApp}%;background:#E67E22;border-radius:2px;"></div></div>`;
-  avgBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${avgMeets}%;background:#F1C40F;border-radius:2px;"></div></div>`;
-  avgBarHtml += `<div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${avgMast}%;background:#27AE60;border-radius:2px;"></div></div>`;
-  avgBarHtml += '</div>';
-  avgBarHtml += '</div>';
-
+  // Peer average row (always last, always highlighted)
   html += `<tr class="peer-highlight-row">
     <td class="rank-num">—</td>
     <td class="peer-name">Peer Group Average</td>
-    <td>${avgBarHtml}</td>
-    <td class="num">${peerAvgMeets != null ? peerAvgMeets.toFixed(1) + '%' : '—'}</td>
+    <td class="num">${avgApp != null ? avgApp.toFixed(1) + '%' : '—'}</td>
+    <td class="num">${avgMeets != null ? avgMeets.toFixed(1) + '%' : '—'}</td>
+    <td class="num">${avgMast != null ? avgMast.toFixed(1) + '%' : '—'}</td>
     <td class="num"><span class="cmp-delta ${vsPeerClass}">${vsPeerArrow} ${Math.abs(vsPeerDelta).toFixed(1)}pp</span></td>
     <td class="num">—</td>
     <td class="num">—</td>
@@ -932,20 +911,50 @@ function buildPeerTable(title, type, d, level, grade, subject, perf) {
 }
 
 // ── Peer sort helpers ──
-function sortPeers(peers, sortBy, dir, level, grade, subject) {
-  const sorted = [...peers];
+function sortPeers(entries, sortBy, dir, level, grade, subject, districtMeetsPct) {
+  const sorted = [...entries];
   sorted.sort((a, b) => {
-    const aData = getPerformanceForSelectors(a, level, grade, subject);
-    const bData = getPerformanceForSelectors(b, level, grade, subject);
-    if (sortBy === 'meets') {
-      const aVal = aData ? (aData.meets_pct || 0) : 0;
-      const bVal = bData ? (bData.meets_pct || 0) : 0;
-      return dir === 'desc' ? bVal - aVal : aVal - bVal;
-    } else {
+    // Selected district always sorts by its data like any other row
+    if (sortBy === 'name') {
       return dir === 'asc'
         ? a.name.localeCompare(b.name)
         : b.name.localeCompare(a.name);
     }
+    const aData = getPerformanceForSelectors(a, level, grade, subject);
+    const bData = getPerformanceForSelectors(b, level, grade, subject);
+
+    let aVal = 0, bVal = 0;
+    switch (sortBy) {
+      case 'app':
+        aVal = aData ? (aData.app_pct || 0) : 0;
+        bVal = bData ? (bData.app_pct || 0) : 0;
+        break;
+      case 'meets':
+        aVal = aData ? (aData.meets_pct || 0) : 0;
+        bVal = bData ? (bData.meets_pct || 0) : 0;
+        break;
+      case 'mast':
+        aVal = aData ? (aData.mast_pct || 0) : 0;
+        bVal = bData ? (bData.mast_pct || 0) : 0;
+        break;
+      case 'vs':
+        const aMeets = aData ? (aData.meets_pct || 0) : 0;
+        const bMeets = bData ? (bData.meets_pct || 0) : 0;
+        aVal = districtMeetsPct != null ? districtMeetsPct - aMeets : 0;
+        bVal = districtMeetsPct != null ? districtMeetsPct - bMeets : 0;
+        break;
+      case 'enroll':
+        aVal = a.enrollment || 0;
+        bVal = b.enrollment || 0;
+        break;
+      case 'econ':
+        aVal = a.econ_disadv_pct || 0;
+        bVal = b.econ_disadv_pct || 0;
+        break;
+      default:
+        return 0;
+    }
+    return dir === 'desc' ? bVal - aVal : aVal - bVal;
   });
   return sorted;
 }
