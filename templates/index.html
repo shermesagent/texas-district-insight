@@ -417,34 +417,6 @@ function renderFullDashboard(d) {
   renderDashboardContent(d);
 }
 
-function getPerformanceForSelectors(d, level, grade, subject) {
-  if (level === 'EOC') {
-    const subjData = (d.eoc || {})[subject];
-    if (!subjData) return null;
-    return {
-      tests_taken: subjData.tests_taken,
-      avg_scale: subjData.avg_scale,
-      dnm_pct: subjData.dnm_pct,
-      app_pct: subjData.app_pct,
-      meets_pct: subjData.meets_pct,
-      mast_pct: subjData.mast_pct
-    };
-  } else {
-    const gradeData = (d.grades_3_8 || {})[grade];
-    if (!gradeData) return null;
-    const subjData = gradeData[subject];
-    if (!subjData) return null;
-    return {
-      tests_taken: subjData.tests_taken,
-      avg_scale: subjData.avg_scale,
-      dnm_pct: subjData.dnm_pct,
-      app_pct: subjData.app_pct,
-      meets_pct: subjData.meets_pct,
-      mast_pct: subjData.mast_pct
-    };
-  }
-}
-
 function getECRForGrade(d, grade, level) {
   // ECR is per-grade for 3-8, per-subject for EOC
   if (level === 'EOC') return null;
@@ -637,7 +609,6 @@ function buildPerformanceSection(d, level, grade, subject, perf) {
   html += `<div class="benchmark-section">`;
 
   // Fetch benchmarks
-  const _this = this;
   // We'll fetch benchmarks async and inject
   html += `<div id="benchmarks-container">Loading benchmarks...</div>`;
 
