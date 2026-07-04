@@ -128,15 +128,38 @@
   .perf-bar-legend .legend-swatch.meets { background: #F1C40F; }
   .perf-bar-legend .legend-swatch.mast { background: #27AE60; }
 
-  /* ── Comparison bars row ── */
-  .comparison-row { display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
-  .comparison-row .cmp-label { font-size: 0.78rem; font-weight: 600; color: #555; min-width: 100px; }
-  .comparison-row .cmp-bar { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 2px; }
-  .comparison-row .cmp-pct { font-size: 0.82rem; font-weight: 600; color: #333; min-width: 55px; text-align: right; font-variant-numeric: tabular-nums; }
-  .comparison-row .cmp-delta { font-size: 0.78rem; font-weight: 600; min-width: 60px; text-align: right; }
-  .comparison-row .cmp-delta.pos { color: #27AE60; }
-  .comparison-row .cmp-delta.neg { color: #C0392B; }
-  .comparison-row .cmp-delta.neutral { color: #888; }
+  /* ── Comparison table ── */
+  .cmp-table-wrap { overflow-x: auto; margin-top: 1rem; }
+  .cmp-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .cmp-table thead th {
+    text-align: left; padding: 0.45rem 0.5rem; background: #F5F0E8;
+    font-weight: 600; color: #14233B; font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.04em; border-bottom: 2px solid #C08A2E;
+  }
+  .cmp-table thead th:not(:first-child) { text-align: right; }
+  .cmp-table tbody td {
+    padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee;
+    font-variant-numeric: tabular-nums;
+  }
+  .cmp-table .cmp-cat { font-weight: 500; color: #555; font-size: 0.78rem; }
+  .cmp-table .cmp-val { text-align: right; font-weight: 700; }
+  .cmp-table .cmp-val.cmp-better { color: #1E8449; background: rgba(39,174,96,0.07); border-radius: 3px; }
+  .cmp-table .cmp-val.cmp-worse  { color: #C0392B; background: rgba(192,57,43,0.07); border-radius: 3px; }
+  .cmp-table .cmp-val.cmp-base   { color: #333; }
+  .cmp-table .cmp-delta-row td {
+    text-align: center; padding: 0.3rem 0.5rem; font-size: 0.78rem;
+    border-bottom: none;
+  }
+  .cmp-table .cmp-delta-val { font-weight: 600; }
+  .cmp-table .cmp-delta-val.pos { color: #27AE60; }
+  .cmp-table .cmp-delta-val.neg { color: #C0392B; }
+  .cmp-table .cmp-delta-val.neutral { color: #888; }
+
+  @media (max-width: 480px) {
+    .cmp-table { font-size: 0.75rem; }
+    .cmp-table thead th { padding: 0.3rem 0.35rem; font-size: 0.65rem; }
+    .cmp-table tbody td { padding: 0.3rem 0.35rem; }
+  }
 
   /* ── ECR section ── */
   .ecr-grid { display: grid; grid-template-columns: repeat(11, 1fr); gap: 0.3rem; }
@@ -210,8 +233,6 @@
     .dc-stats { gap: 1rem; }
     .content { padding: 0 1rem 2rem; }
     .card { padding: 1rem; }
-    .comparison-row { flex-direction: column; align-items: stretch; gap: 0.5rem; }
-    .comparison-row .cmp-label { min-width: 0; }
     .dc-meta { gap: 0.75rem; }
     .dc-meta-item { font-size: 0.72rem; }
     .perf-bar-legend { gap: 0.75rem; }
@@ -246,9 +267,10 @@
     .ecr-bar-col .ecr-bar-wrap { height: 60px; }
     .perf-bar-legend { gap: 0.5rem; }
     .perf-bar-legend .legend-item { font-size: 0.68rem; }
-    .comparison-row .cmp-label { font-size: 0.68rem; min-width: 70px; }
-    .comparison-row .cmp-pct { font-size: 0.72rem; min-width: 45px; }
-    .comparison-row .cmp-delta { font-size: 0.68rem; min-width: 50px; }
+    .cmp-table { font-size: 0.72rem; }
+    .cmp-table thead th { padding: 0.25rem 0.3rem; font-size: 0.6rem; }
+    .cmp-table tbody td { padding: 0.25rem 0.3rem; }
+    .cmp-table .cmp-cat { font-size: 0.68rem; }
     .peer-table { font-size: 0.65rem; }
     .peer-table th, .peer-table td { padding: 0.2rem 0.2rem; }
     .peer-table th:nth-child(5),
@@ -651,72 +673,74 @@ async function fetchBenchmarks(d, perf, level, grade, subject) {
     if (!res.ok) throw new Error('Benchmark fetch failed');
     const bench = await res.json();
 
-    let html = '';
-
-    // State benchmark bar
-    if (bench.state) {
-      const s = bench.state;
-      const sDnm = s.dnm_pct || 0;
-      const sApp = s.app_pct || 0;
-      const sMeets = s.meets_pct || 0;
-      const sMast = s.mast_pct || 0;
-
-      const meetsPlus = (perf.meets_pct || 0);
-      const sMeetsPlus = s.meets_pct || 0;
-      const meetsDelta = meetsPlus - sMeetsPlus;
-
-      html += buildComparisonBar('State Average', sDnm, sApp, sMeets, sMast, meetsDelta, sMeetsPlus);
-    }
-
-    // Region benchmark bar
-    if (bench.region) {
-      const r = bench.region;
-      const rDnm = r.dnm_pct || 0;
-      const rApp = r.app_pct || 0;
-      const rMeets = r.meets_pct || 0;
-      const rMast = r.mast_pct || 0;
-      const regionShort = d.region ? d.region.replace(/^REGION \d+:\s*/, '') : d.region;
-
-      const meetsPlus = (perf.meets_pct || 0);
-      const rMeetsPlus = r.meets_pct || 0;
-      const meetsDelta = meetsPlus - rMeetsPlus;
-
-      html += buildComparisonBar(regionShort + ' Average', rDnm, rApp, rMeets, rMast, meetsDelta, rMeetsPlus);
-    }
-
-    return html;
+    return buildComparisonTable(perf, bench.state, bench.region, d);
   } catch(e) {
     return `<p style="color:#888;font-size:0.82rem;">Could not load benchmark data.</p>`;
   }
 }
 
-function buildComparisonBar(label, dnm, app, meets, mast, meetsDelta, meetsPlus) {
-  const deltaClass = meetsDelta > 1 ? 'pos' : meetsDelta < -1 ? 'neg' : 'neutral';
-  const deltaSign = meetsDelta > 0 ? '▲' : meetsDelta < 0 ? '▼' : '—';
-  const deltaVal = Math.abs(meetsDelta).toFixed(1);
+function buildComparisonTable(perf, stateData, regionData, d) {
+  const regionLabel = d && d.region ? d.region.replace(/^REGION \d+:\s*/, '') + ' Average' : 'Region Average';
 
-  return `<div class="comparison-row">
-    <div class="cmp-label">${label}</div>
-    <div class="cmp-bar">
-      <div class="perf-bar-row">
-        <div class="perf-bar-track"><div class="perf-bar-fill dnm" style="width:${dnm}%"></div></div>
-        <div class="perf-bar-pct">${dnm.toFixed(0)}%</div>
-      </div>
-      <div class="perf-bar-row">
-        <div class="perf-bar-track"><div class="perf-bar-fill app" style="width:${app}%"></div></div>
-        <div class="perf-bar-pct">${app.toFixed(0)}%</div>
-      </div>
-      <div class="perf-bar-row">
-        <div class="perf-bar-track"><div class="perf-bar-fill meets" style="width:${meets}%"></div></div>
-        <div class="perf-bar-pct">${meets.toFixed(0)}%</div>
-      </div>
-      <div class="perf-bar-row">
-        <div class="perf-bar-track"><div class="perf-bar-fill mast" style="width:${mast}%"></div></div>
-        <div class="perf-bar-pct">${mast.toFixed(0)}%</div>
-      </div>
-    </div>
-    <div class="cmp-delta ${deltaClass}">${deltaSign} ${deltaVal}pp vs ${label}</div>
-  </div>`;
+  const cats = [
+    { key: 'dnm_pct', label: 'Did Not Meet', lowerIsBetter: true },
+    { key: 'app_pct', label: 'Approaches or Above', lowerIsBetter: false },
+    { key: 'meets_pct', label: 'Meets or Above', lowerIsBetter: false },
+    { key: 'mast_pct', label: 'Masters', lowerIsBetter: false },
+  ];
+
+  let html = `<div class="cmp-table-wrap"><table class="cmp-table">
+    <thead><tr><th>Category</th><th>District</th><th>State</th><th>${regionLabel}</th></tr></thead>
+    <tbody>`;
+
+  cats.forEach(cat => {
+    const dVal = perf ? (perf[cat.key] || 0) : 0;
+    const sVal = stateData ? (stateData[cat.key] || 0) : null;
+    const rVal = regionData ? (regionData[cat.key] || 0) : null;
+
+    // Color district cell vs state
+    let dClass = 'cmp-base';
+    if (sVal != null) {
+      if (cat.lowerIsBetter) {
+        dClass = dVal < sVal ? 'cmp-better' : dVal > sVal ? 'cmp-worse' : 'cmp-base';
+      } else {
+        dClass = dVal > sVal ? 'cmp-better' : dVal < sVal ? 'cmp-worse' : 'cmp-base';
+      }
+    }
+
+    html += `<tr>
+      <td class="cmp-cat">${cat.label}</td>
+      <td class="cmp-val ${dClass}">${dVal.toFixed(0)}%</td>
+      <td class="cmp-val ${sVal != null ? 'cmp-base' : ''}">${sVal != null ? sVal.toFixed(0) + '%' : '—'}</td>
+      <td class="cmp-val ${rVal != null ? 'cmp-base' : ''}">${rVal != null ? rVal.toFixed(0) + '%' : '—'}</td>
+    </tr>`;
+  });
+
+  // ── Delta summary row ──
+  const districtMeets = perf ? (perf.meets_pct || 0) : 0;
+
+  if (stateData) {
+    const sMeets = stateData.meets_pct || 0;
+    const sDelta = districtMeets - sMeets;
+    const sClass = sDelta > 1 ? 'pos' : sDelta < -1 ? 'neg' : 'neutral';
+    const sArrow = sDelta > 0 ? '▲' : sDelta < 0 ? '▼' : '—';
+    html += `<tr class="cmp-delta-row">
+      <td colspan="4"><span class="cmp-delta-val ${sClass}">${sArrow} ${Math.abs(sDelta).toFixed(1)}pp Meets+ vs State Average</span></td>
+    </tr>`;
+  }
+
+  if (regionData) {
+    const rMeets = regionData.meets_pct || 0;
+    const rDelta = districtMeets - rMeets;
+    const rClass = rDelta > 1 ? 'pos' : rDelta < -1 ? 'neg' : 'neutral';
+    const rArrow = rDelta > 0 ? '▲' : rDelta < 0 ? '▼' : '—';
+    html += `<tr class="cmp-delta-row">
+      <td colspan="4"><span class="cmp-delta-val ${rClass}">${rArrow} ${Math.abs(rDelta).toFixed(1)}pp Meets+ vs ${regionLabel}</span></td>
+    </tr>`;
+  }
+
+  html += `</tbody></table></div>`;
+  return html;
 }
 
 function buildECRSection(ecrData, grade, subject) {
