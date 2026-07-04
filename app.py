@@ -1,226 +1,314 @@
 #!/usr/bin/env python3
-"""Texas District Dashboard — Prototype MVP"""
-import json, csv, re, math
+"""Texas School Compass Dashboard — Backend API (2026 data)"""
+import json, math, os, pwd
 from pathlib import Path
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
 import uvicorn
 
-# ── Data paths ──
-DATA = Path.home() / ".hermes" / "persistent_workspace" / "district-comparison"
-SRC  = Path.home() / "src" / "texas-district-comparison" / "data"
-TMP  = Path("/tmp")
+# ── Paths ──
+# Use pwd to get real home directory (resilient to $HOME being overridden by profile env)
+REAL_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
+BASE = Path(__file__).parent
+DATA = BASE / "data"
+PEER = REAL_HOME / ".hermes" / "persistent_workspace" / "district-comparison"
 
-# ── Load enriched master list (demographics for all districts) ──
-print("Loading enriched master list...")
-with open(DATA / "master_district_list_enriched.json") as f:
-    all_districts_raw = json.load(f)
+# ── Load data ──
+print("Loading 2026 STAAR data...")
+with open(DATA / "staar_2026.json") as f:
+    staar = json.load(f)
 
-by_cdc = {}
-for d in all_districts_raw:
-    cdc = d["cdc"]
-    by_cdc[cdc] = {
-        "cdc": cdc,
-        "name": d["name"],
-        "county": d.get("county", ""),
-        "region": d.get("region_name", ""),
-        "lat": d.get("lat"),
-        "lon": d.get("lon"),
-        "enrollment": d.get("enrollment", 0),
-        "charter": d.get("charter", False),
-        "tea_rating": d.get("tea_rating", ""),
-        "econ_disadv_pct": d.get("econ_disadv_pct", 0),
-        "eb_el_pct": d.get("eb_el_pct", 0),
-        "sped_pct": d.get("sped_pct", 0),
-        "at_risk_pct": d.get("at_risk_pct", 0),
-        "bilingual_pct": d.get("bilingual_pct", 0),
-        "gifted_pct": d.get("gifted_pct", 0),
-        "hispanic_pct": d.get("hispanic_pct", 0),
-        "white_pct": d.get("white_pct", 0),
-        "black_pct": d.get("black_pct", 0),
-        "asian_pct": d.get("asian_pct", 0),
-        "native_pct": d.get("native_pct", 0),
-        "two_or_more_pct": d.get("two_or_more_pct", 0),
-    }
+with open(DATA / "districts.json") as f:
+    district_info = json.load(f)
 
-print(f"  {len(by_cdc)} districts loaded")
+with open(PEER / "master_district_list_enriched.json") as f:
+    master_list = json.load(f)
 
-# ── Load demographic similarity peers ──
-print("Loading demographic similarity...")
-with open(DATA / "demographic_similarity.json") as f:
+with open(PEER / "demographic_similarity.json") as f:
     demo_sim = json.load(f)
-print(f"  {len(demo_sim)} entries")
 
-# ── Load geographic proximity peers ──
-print("Loading geographic proximity...")
-with open(DATA / "geographic_proximity.json") as f:
+with open(PEER / "geographic_proximity.json") as f:
     geo_prox = json.load(f)
-print(f"  {len(geo_prox)} entries")
 
-# ── Load TAPR performance data ──
-print("Loading TAPR performance data...")
-# Structure: {cdc: {subject: {grade: {"app": X, "meets": X, "mast": X}}}}
-tapr_data = {}
+# ── Build lookup indexes ──
+# master_by_cdc: enriched demographics keyed by CDC
+master_by_cdc = {}
+for d in master_list:
+    cdc = d["cdc"]
+    master_by_cdc[cdc] = d
 
-tapr_files = sorted(TMP.glob("tapr_gr*_math_2025.csv"))
-for fp in tapr_files:
-    # Extract grade from filename (e.g., tapr_gr3_math_2025.csv)
-    m = re.search(r"gr(\d+)", fp.name)
-    if not m:
-        continue
-    grade = int(m.group(1))
-    subject = "math"
+# district_regions: map CDC → ESC region
+district_region = {}
+for cdc, info in district_info.items():
+    m = master_by_cdc.get(cdc, {})
+    district_region[cdc] = m.get("region_name", "")
 
-    with open(fp, newline="", encoding="utf-8-sig") as f:
-        reader = csv.reader(f)
-        next(reader)  # skip header
-        for row in reader:
-            if not row or len(row) < 5:
-                continue
-            cdc = row[0].strip()
-            name = row[1].strip()
-            if cdc not in tapr_data:
-                tapr_data[cdc] = {"name": name}
-            if subject not in tapr_data[cdc]:
-                tapr_data[cdc][subject] = {}
-            
-            # Parse the key columns (App+, Meets+, Masters)
-            try:
-                app = float(row[2]) if row[2] and row[2] != "-1" else None
-            except:
-                app = None
-            try:
-                meets = float(row[3]) if row[3] and row[3] != "-1" else None
-            except:
-                meets = None
-            try:
-                mast = float(row[4]) if row[4] and row[4] != "-1" else None
-            except:
-                mast = None
-            
-            tapr_data[cdc][subject][grade] = {
-                "app": app,
-                "meets": meets,
-                "mast": mast
-            }
-
-print(f"  {len(tapr_data)} districts with TAPR data")
-print(f"  Grades: {sorted(set(g for d in tapr_data.values() for s in d if s != 'name' for g in d[s].keys()))}")
+# region_districts: map region → list of CDC codes
+region_districts = {}
+for cdc, info in district_info.items():
+    region = district_region.get(cdc, "")
+    if region:
+        region_districts.setdefault(region, []).append(cdc)
 
 # ── Build search index ──
+# Name→CDC lookup (case-insensitive)
+name_to_cdc = {}
 search_index = []
-for cdc, d in by_cdc.items():
-    search_index.append({
-        "cdc": cdc,
-        "name": d["name"],
-        "county": d["county"],
-        "region": d["region"],
-    })
+for cdc, info in district_info.items():
+    name = info.get("name", "")
+    if name:
+        key = name.upper()
+        name_to_cdc[key] = cdc
+        search_index.append({
+            "cdc": cdc,
+            "name": name,
+            "county": info.get("county", ""),
+            "region": district_region.get(cdc, ""),
+        })
 search_index.sort(key=lambda x: x["name"])
 
-# ── FastAPI app ──
-app = FastAPI(title="Texas District Dashboard", version="0.1.0")
+print(f"  {len(staar)} districts loaded")
+print(f"  {len(search_index)} districts in search index")
+print(f"  {len(demo_sim)} demographic peer sets")
+print(f"  {len(geo_prox)} geographic peer sets")
 
-# ── API endpoints ──
+# ── Helper: compute state/region benchmarks ──
+def compute_benchmarks(subject, grade_or_eoc=None, is_eoc=False):
+    """Compute state averages for a given subject/grade across all districts."""
+    vals = []
+    for cdc, data in staar.items():
+        source = data.get("eoc" if is_eoc else "grades_3_8", {})
+        grade_str = str(grade_or_eoc)
+        if is_eoc:
+            subj_data = source.get(subject)
+        else:
+            grade_data = source.get(grade_str, {})
+            subj_data = grade_data.get(subject)
+        if subj_data and subj_data.get("tests_taken", 0) > 0 and subj_data.get("avg_scale"):
+            vals.append({
+                "tests_taken": subj_data["tests_taken"],
+                "avg_scale": subj_data["avg_scale"],
+                "dnm_pct": subj_data.get("dnm_pct"),
+                "app_pct": subj_data.get("app_pct"),
+                "meets_pct": subj_data.get("meets_pct"),
+                "mast_pct": subj_data.get("mast_pct"),
+            })
+    if not vals:
+        return None
+    total_t = sum(v["tests_taken"] for v in vals)
+    avg_scale = round(sum(v["avg_scale"] * v["tests_taken"] for v in vals) / total_t) if total_t else None
+    app_pct = round(sum(v["app_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    meets_pct = round(sum(v["meets_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    mast_pct = round(sum(v["mast_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    dnm_pct = round(sum(v["dnm_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    return {
+        "tests_taken": total_t,
+        "avg_scale": avg_scale,
+        "dnm_pct": dnm_pct,
+        "app_pct": app_pct,
+        "meets_pct": meets_pct,
+        "mast_pct": mast_pct,
+    }
 
+def compute_region_benchmark(region, subject, grade_or_eoc=None, is_eoc=False):
+    """Compute region average for a given subject/grade."""
+    cdcs = region_districts.get(region, [])
+    vals = []
+    for cdc in cdcs:
+        data = staar.get(cdc)
+        if not data:
+            continue
+        source = data.get("eoc" if is_eoc else "grades_3_8", {})
+        grade_str = str(grade_or_eoc)
+        if is_eoc:
+            subj_data = source.get(subject)
+        else:
+            grade_data = source.get(grade_str, {})
+            subj_data = grade_data.get(subject)
+        if subj_data and subj_data.get("tests_taken", 0) > 0 and subj_data.get("avg_scale"):
+            vals.append(subj_data)
+    if not vals:
+        return None
+    total_t = sum(v["tests_taken"] for v in vals)
+    avg_scale = round(sum(v["avg_scale"] * v["tests_taken"] for v in vals) / total_t) if total_t else None
+    app_pct = round(sum(v["app_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    meets_pct = round(sum(v["meets_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    mast_pct = round(sum(v["mast_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    dnm_pct = round(sum(v["dnm_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    return {
+        "tests_taken": total_t,
+        "avg_scale": avg_scale,
+        "dnm_pct": dnm_pct,
+        "app_pct": app_pct,
+        "meets_pct": meets_pct,
+        "mast_pct": mast_pct,
+    }
+
+# ── Benchmark cache ──
+from functools import lru_cache
+
+@lru_cache(maxsize=500)
+def get_benchmark(subject, grade, is_eoc=False):
+    return compute_benchmarks(subject, grade, is_eoc)
+
+@lru_cache(maxsize=500)
+def get_region_benchmark(region, subject, grade, is_eoc=False):
+    return compute_region_benchmark(region, subject, grade, is_eoc)
+
+# ── FastAPI ──
+app = FastAPI(title="Texas School Compass Dashboard")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# ── API: Search ──
 @app.get("/api/search")
 def search_districts(q: str = Query("", min_length=0)):
-    """Search districts by name."""
     if not q:
         return {"results": search_index[:50]}
-    
     q = q.upper().strip()
     results = [d for d in search_index if q in d["name"].upper()]
     return {"results": results[:50]}
 
-@app.get("/api/districts/{cdc}")
+# ── API: District data (full) ──
+@app.get("/api/district/{cdc}")
 def get_district(cdc: str):
-    """Get full district profile with peer groups."""
-    district = by_cdc.get(cdc)
+    district = district_info.get(cdc)
     if not district:
-        # Try to find by name?
         raise HTTPException(404, f"District {cdc} not found")
     
-    result = {**district}
+    data = staar.get(cdc, {})
+    master = master_by_cdc.get(cdc, {})
     
-    # Add performance data
-    perf = tapr_data.get(cdc, {})
-    result["performance"] = {
-        k: v for k, v in perf.items() if k != "name"
+    result = {
+        "cdc": cdc,
+        "name": district.get("name", ""),
+        "county": district.get("county", ""),
+        "region": district_region.get(cdc, ""),
+        "enrollment": master.get("enrollment", 0),
+        "econ_disadv_pct": master.get("econ_disadv_pct", 0),
+        "eb_el_pct": master.get("eb_el_pct", 0),
+        "sped_pct": master.get("sped_pct", 0),
+        "grades_3_8": data.get("grades_3_8", {}),
+        "eoc": data.get("eoc", {}),
+        "ecr": data.get("ecr", {}),
     }
     
-    # Add demographic peers
+    # ── Demographic peers ──
     demo_peers_raw = demo_sim.get(cdc, [])
     demo_peers = []
     for p in demo_peers_raw:
-        peer_info = by_cdc.get(p["cdc"], {})
+        pcdc = p["cdc"]
+        pdata = staar.get(pcdc, {})
+        pmaster = master_by_cdc.get(pcdc, {})
         demo_peers.append({
-            "cdc": p["cdc"],
+            "cdc": pcdc,
             "name": p["name"],
             "score": p["score"],
             "rank": p["rank"],
-            "enrollment": peer_info.get("enrollment", 0),
-            "econ_disadv_pct": peer_info.get("econ_disadv_pct", 0),
-            "eb_el_pct": peer_info.get("eb_el_pct", 0),
-            "sped_pct": peer_info.get("sped_pct", 0),
-            "performance": {
-                k: v for k, v in tapr_data.get(p["cdc"], {}).items() if k != "name"
-            }
+            "enrollment": pmaster.get("enrollment", 0),
+            "econ_disadv_pct": pmaster.get("econ_disadv_pct", 0),
+            "eb_el_pct": pmaster.get("eb_el_pct", 0),
+            "sped_pct": pmaster.get("sped_pct", 0),
+            "grades_3_8": pdata.get("grades_3_8", {}),
+            "eoc": pdata.get("eoc", {}),
+            "ecr": pdata.get("ecr", {}),
         })
     result["demo_peers"] = demo_peers
     
-    # Add geographic peers
+    # ── Geographic peers ──
     geo_peers_raw = geo_prox.get(cdc, [])
     geo_peers = []
     for p in geo_peers_raw:
-        peer_info = by_cdc.get(p["cdc"], {})
+        pcdc = p["cdc"]
+        pdata = staar.get(pcdc, {})
+        pmaster = master_by_cdc.get(pcdc, {})
         geo_peers.append({
-            "cdc": p["cdc"],
+            "cdc": pcdc,
             "name": p["name"],
             "dist_mi": p.get("dist_mi", 0),
             "rank": p["rank"],
-            "enrollment": peer_info.get("enrollment", 0),
-            "econ_disadv_pct": peer_info.get("econ_disadv_pct", 0),
-            "eb_el_pct": peer_info.get("eb_el_pct", 0),
-            "sped_pct": peer_info.get("sped_pct", 0),
-            "performance": {
-                k: v for k, v in tapr_data.get(p["cdc"], {}).items() if k != "name"
-            }
+            "enrollment": pmaster.get("enrollment", 0),
+            "econ_disadv_pct": pmaster.get("econ_disadv_pct", 0),
+            "eb_el_pct": pmaster.get("eb_el_pct", 0),
+            "sped_pct": pmaster.get("sped_pct", 0),
+            "grades_3_8": pdata.get("grades_3_8", {}),
+            "eoc": pdata.get("eoc", {}),
+            "ecr": pdata.get("ecr", {}),
         })
     result["geo_peers"] = geo_peers
     
-    # Calculate peer group averages
-    for label, peers_list in [("demo_avg", demo_peers), ("geo_avg", geo_peers)]:
-        grades_found = set()
-        for p in peers_list:
-            for subj, grades in p.get("performance", {}).items():
-                for g in grades:
-                    grades_found.add(g)
-        
-        avg = {}
-        for g in sorted(grades_found):
-            apps = [p["performance"].get("math", {}).get(g, {}).get("app") for p in peers_list]
-            meets = [p["performance"].get("math", {}).get(g, {}).get("meets") for p in peers_list]
-            masts = [p["performance"].get("math", {}).get(g, {}).get("mast") for p in peers_list]
-            apps = [a for a in apps if a is not None]
-            meets = [m for m in meets if m is not None]
-            masts = [m for m in masts if m is not None]
-            avg[g] = {
-                "app": round(sum(apps)/len(apps), 1) if apps else None,
-                "meets": round(sum(meets)/len(meets), 1) if meets else None,
-                "mast": round(sum(masts)/len(masts), 1) if masts else None,
-            }
-        result[label] = avg
-    
     return result
 
-# ── Serve frontend ──
-with open(Path(__file__).parent / "templates" / "index.html") as f:
-    FRONTEND_HTML = f.read()
+# ── API: Subject benchmark ──
+@app.get("/api/benchmark/{subject}/{grade}")
+def get_benchmark_endpoint(subject: str, grade: str, region: Optional[str] = None):
+    """Get state and optional region benchmarks for a subject/grade."""
+    is_eoc = grade.upper() == "EOC"
+    grade_val = grade
+    state = get_benchmark(subject, grade_val, is_eoc)
+    reg = None
+    if region:
+        reg = get_region_benchmark(region, subject, grade_val, is_eoc)
+    return {"state": state, "region": reg}
+
+# ── API: Available subjects ──
+@app.get("/api/catalog")
+def get_catalog():
+    """Return all available subjects and grades in the dataset."""
+    catalog = {"grades_3_8": {}, "eoc": []}
+    grades_seen = set()
+    subjects_seen = set()
+    
+    # Scan 3-8
+    for cdc, data in staar.items():
+        for g, subs in data.get("grades_3_8", {}).items():
+            grades_seen.add(g)
+            for s in subs:
+                subjects_seen.add(s)
+    
+    # Sort grades and subjects
+    sorted_grades = sorted(grades_seen, key=int)
+    sorted_subjects = sorted(subjects_seen)
+    
+    # Organize by grade
+    for g in sorted_grades:
+        g_subjects = set()
+        for cdc, data in staar.items():
+            for s in data.get("grades_3_8", {}).get(g, {}):
+                g_subjects.add(s)
+        catalog["grades_3_8"][g] = sorted(g_subjects)
+    
+    catalog["eoc"] = sorted(set(
+        s for cdc, data in staar.items() for s in data.get("eoc", {})
+    ))
+    
+    # ECR availability
+    ecr_grades = set()
+    ecr_eoc = set()
+    for cdc, data in staar.items():
+        for key in data.get("ecr", {}):
+            if key in "0123456789":
+                ecr_grades.add(key)
+            else:
+                ecr_eoc.add(key)
+    catalog["ecr"] = {
+        "grades_3_8": sorted(ecr_grades, key=int),
+        "eoc": sorted(ecr_eoc),
+    }
+    
+    catalog["grade_labels"] = {g: f"Grade {g}" for g in sorted_grades}
+    catalog["grade_labels"]["EOC"] = "EOC"
+    
+    return catalog
+
+# ── Server HTML ──
+with open(BASE / "templates" / "index.html") as f:
+    FRONTEND = f.read()
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return FRONTEND_HTML
+    return FRONTEND
 
 @app.get("/favicon.ico")
 def favicon():
@@ -228,8 +316,8 @@ def favicon():
 
 # ── Run ──
 if __name__ == "__main__":
-    print("\n🚀 Starting Texas District Dashboard...")
-    print("   Open http://localhost:8000 in your browser\n")
     import sys
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8786
+    print(f"\n🚀 Texas School Compass Dashboard")
+    print(f"   http://localhost:{port}\n")
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

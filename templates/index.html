@@ -139,7 +139,7 @@
   .comparison-row .cmp-delta.neutral { color: #888; }
 
   /* ── ECR section ── */
-  .ecr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 0.3rem; }
+  .ecr-grid { display: grid; grid-template-columns: repeat(11, 1fr); gap: 0.3rem; }
   .ecr-bar-col { text-align: center; }
   .ecr-bar-col .ecr-label { font-size: 0.7rem; color: #888; margin-top: 0.2rem; }
   .ecr-bar-col .ecr-bar-wrap { height: 120px; display: flex; align-items: flex-end; justify-content: center; }
@@ -156,7 +156,11 @@
     text-align: left; padding: 0.4rem 0.5rem; background: #F5F0E8;
     font-weight: 600; color: #14233B; font-size: 0.7rem; text-transform: uppercase;
     letter-spacing: 0.04em; border-bottom: 2px solid #C08A2E;
+    cursor: pointer; user-select: none;
   }
+  .peer-table th:hover { background: #EDE8D8; }
+  .peer-table th .sort-arrow { font-size: 0.6rem; margin-left: 0.2rem; color: #C08A2E; }
+  .peer-table th .sort-arrow.inactive { color: #ccc; }
   .peer-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; vertical-align: middle; }
   .peer-table tr:hover td { background: rgba(192,138,46,0.05); }
   .peer-table .rank-num { font-weight: 600; color: #888; width: 2rem; text-align: center; font-size: 0.75rem; }
@@ -211,13 +215,14 @@
     .dc-meta { gap: 0.75rem; }
     .dc-meta-item { font-size: 0.72rem; }
     .perf-bar-legend { gap: 0.75rem; }
-    .ecr-grid { grid-template-columns: repeat(6, 1fr); }
+    .ecr-bar-col .ecr-bar-wrap { height: 80px; }
+    .ecr-pct { font-size: 0.6rem; }
     .peer-table { font-size: 0.72rem; }
     .peer-table th, .peer-table td { padding: 0.25rem 0.3rem; }
+    .peer-table th:nth-child(6),
     .peer-table th:nth-child(7),
-    .peer-table th:nth-child(8),
-    .peer-table td:nth-child(7),
-    .peer-table td:nth-child(8) { display: none; }
+    .peer-table td:nth-child(6),
+    .peer-table td:nth-child(7) { display: none; }
   }
 
   @media (max-width: 480px) {
@@ -237,8 +242,8 @@
     .content { padding: 0 0.75rem 1.5rem; }
     .card { padding: 0.75rem; }
     .card h3 { font-size: 0.9rem; }
-    .ecr-grid { grid-template-columns: repeat(4, 1fr); }
-    .ecr-bar-col .ecr-bar-wrap { height: 80px; }
+    .ecr-grid { grid-template-columns: repeat(11, 1fr); }
+    .ecr-bar-col .ecr-bar-wrap { height: 60px; }
     .perf-bar-legend { gap: 0.5rem; }
     .perf-bar-legend .legend-item { font-size: 0.68rem; }
     .comparison-row .cmp-label { font-size: 0.68rem; min-width: 70px; }
@@ -246,8 +251,12 @@
     .comparison-row .cmp-delta { font-size: 0.68rem; min-width: 50px; }
     .peer-table { font-size: 0.65rem; }
     .peer-table th, .peer-table td { padding: 0.2rem 0.2rem; }
-    .peer-table th:nth-child(3),
-    .peer-table td:nth-child(3) { display: none; }
+    .peer-table th:nth-child(5),
+    .peer-table th:nth-child(6),
+    .peer-table th:nth-child(7),
+    .peer-table td:nth-child(5),
+    .peer-table td:nth-child(6),
+    .peer-table td:nth-child(7) { display: none; }
     .peer-table .peer-name .peer-meta { display: none; }
   }
 </style>
@@ -305,6 +314,11 @@ let selectedCDC = null;
 let searchTimeout = null;
 let highlightIndex = -1;
 let searchResults = [];
+let currentRenderState = null;
+let peerSort = {
+  demo: { by: 'meets', dir: 'desc' },
+  geo: { by: 'meets', dir: 'desc' }
+};
 
 const searchInput = document.getElementById('search');
 const autocomplete = document.getElementById('autocomplete');
@@ -534,6 +548,8 @@ function renderDashboardContent(d) {
   html += `</div>`;
 
   appContent.innerHTML = html;
+  // Store state for sort re-renders
+  currentRenderState = { d, level, grade, subject, perf };
 }
 
 function buildDistrictHeader(d) {
@@ -729,18 +745,22 @@ function buildPeerComparison(d, level, grade, subject, perf) {
   let html = '';
 
   // ── Demo Peers ──
+  html += `<div id="peer-demo">`;
   html += buildPeerTable('Demographically Similar Districts', 'demo', d, level, grade, subject, perf);
+  html += `</div>`;
   // ── Geo Peers ──
+  html += `<div id="peer-geo">`;
   html += buildPeerTable('Geographically Neighboring Districts', 'geo', d, level, grade, subject, perf);
+  html += `</div>`;
 
   return html;
 }
 
 function buildPeerTable(title, type, d, level, grade, subject, perf) {
-  const peers = type === 'demo' ? (d.demo_peers || []) : (d.geo_peers || []);
+  let peers = type === 'demo' ? (d.demo_peers || []) : (d.geo_peers || []);
   if (!peers.length) return '';
-
-  const scoreLabel = type === 'demo' ? 'Similarity' : 'Distance';
+  const sortState = peerSort[type];
+  peers = sortPeers(peers, sortState.by, sortState.dir, level, grade, subject);
 
   // Compute peer average for meets_pct
   let peerMeetsSum = 0, peerCount = 0;
@@ -782,10 +802,13 @@ function buildPeerTable(title, type, d, level, grade, subject, perf) {
       <thead>
         <tr>
           <th style="width:2.2rem">#</th>
-          <th>District</th>
-          <th style="width:40px" class="num">${scoreLabel}</th>
+          <th class="sortable-th" data-sort-key="name" data-table-type="${type}" style="cursor:pointer">
+            District<span class="sort-arrow ${sortState.by === 'name' ? '' : 'inactive'}">${sortState.by === 'name' ? (sortState.dir === 'asc' ? '▲' : '▼') : '▲'}</span>
+          </th>
           <th style="width:140px">Perf.</th>
-          <th style="width:55px" class="num">Meets+</th>
+          <th style="width:55px" class="num sortable-th" data-sort-key="meets" data-table-type="${type}" style="cursor:pointer">
+            Meets+<span class="sort-arrow ${sortState.by === 'meets' ? '' : 'inactive'}">${sortState.by === 'meets' ? (sortState.dir === 'desc' ? '▼' : '▲') : '▼'}</span>
+          </th>
           <th style="width:55px" class="num">vs ${d.name}</th>
           <th style="width:45px" class="num">Enroll</th>
           <th style="width:45px" class="num">Econ%</th>
@@ -796,7 +819,6 @@ function buildPeerTable(title, type, d, level, grade, subject, perf) {
   peers.forEach(p => {
     const pData = getPerformanceForSelectors(p, level, grade, subject);
     const pMeets = pData ? pData.meets_pct : null;
-    const score = type === 'demo' ? p.score.toFixed(3) : (p.dist_mi ? p.dist_mi.toFixed(0) + 'mi' : '—');
     
     // Mini bar for peer — 4 independent cumulative bars
     let miniBarHtml = '<div class="mini-peer-bar">';
@@ -824,7 +846,6 @@ function buildPeerTable(title, type, d, level, grade, subject, perf) {
         ${p.name}
         <span class="peer-meta">${p.cdc}</span>
       </td>
-      <td class="num" style="font-size:0.75rem;color:#888;">${score}</td>
       <td>${miniBarHtml}</td>
       <td class="num">${pMeets != null ? pMeets.toFixed(0) + '%' : '—'}</td>
       <td class="num"><span class="cmp-delta ${pDeltaClass}" style="font-size:0.75rem;">${pDelta != null ? `${pDeltaSign} ${Math.abs(pDelta).toFixed(0)}pp` : '—'}</span></td>
@@ -850,7 +871,6 @@ function buildPeerTable(title, type, d, level, grade, subject, perf) {
   html += `<tr class="peer-highlight-row">
     <td class="rank-num">—</td>
     <td class="peer-name">Peer Group Average</td>
-    <td class="num">—</td>
     <td>${avgBarHtml}</td>
     <td class="num">${peerAvgMeets != null ? peerAvgMeets.toFixed(1) + '%' : '—'}</td>
     <td class="num"><span class="cmp-delta ${vsPeerClass}">${vsPeerArrow} ${Math.abs(vsPeerDelta).toFixed(1)}pp</span></td>
@@ -861,6 +881,54 @@ function buildPeerTable(title, type, d, level, grade, subject, perf) {
   html += `</tbody></table></div></div>`;
   return html;
 }
+
+// ── Peer sort helpers ──
+function sortPeers(peers, sortBy, dir, level, grade, subject) {
+  const sorted = [...peers];
+  sorted.sort((a, b) => {
+    const aData = getPerformanceForSelectors(a, level, grade, subject);
+    const bData = getPerformanceForSelectors(b, level, grade, subject);
+    if (sortBy === 'meets') {
+      const aVal = aData ? (aData.meets_pct || 0) : 0;
+      const bVal = bData ? (bData.meets_pct || 0) : 0;
+      return dir === 'desc' ? bVal - aVal : aVal - bVal;
+    } else {
+      return dir === 'asc'
+        ? a.name.localeCompare(b.name)
+        : b.name.localeCompare(a.name);
+    }
+  });
+  return sorted;
+}
+
+function reRenderPeerTables() {
+  if (!currentRenderState) return;
+  const { d, level, grade, subject, perf } = currentRenderState;
+
+  const demoEl = document.getElementById('peer-demo');
+  const geoEl = document.getElementById('peer-geo');
+  if (demoEl) {
+    demoEl.innerHTML = buildPeerTable('Demographically Similar Districts', 'demo', d, level, grade, subject, perf);
+  }
+  if (geoEl) {
+    geoEl.innerHTML = buildPeerTable('Geographically Neighboring Districts', 'geo', d, level, grade, subject, perf);
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const th = e.target.closest('.sortable-th');
+  if (!th) return;
+  const { sortKey, tableType } = th.dataset;
+  if (!sortKey || !tableType) return;
+  const state = peerSort[tableType];
+  if (state.by === sortKey) {
+    state.dir = state.dir === 'desc' ? 'asc' : 'desc';
+  } else {
+    state.by = sortKey;
+    state.dir = sortKey === 'name' ? 'asc' : 'desc';
+  }
+  reRenderPeerTables();
+});
 
 function getPerformanceForSelectors(d, level, grade, subject) {
   if (!d) return null;
