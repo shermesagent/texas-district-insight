@@ -537,6 +537,10 @@ function renderDashboardContent(d) {
   const perf = getPerformanceForSelectors(d, level, grade, subject);
   const ecrData = getECRForGrade(d, grade, level);
   const hasECR = ecrData && ecrData.valid_n > 0;
+  const isReadingSubject = subject && (
+    subject.toUpperCase().includes('READING') ||
+    subject.toUpperCase().includes('RLA')
+  );
 
   let html = '';
 
@@ -547,8 +551,8 @@ function renderDashboardContent(d) {
   html += `<div class="content">`;
   html += buildPerformanceSection(d, level, grade, subject, perf);
   
-  // ── ECR Section ──
-  if (hasECR) {
+  // ── ECR Section (Reading/RLA only) ──
+  if (hasECR && isReadingSubject) {
     html += buildECRSection(ecrData, grade, subject);
   }
 
@@ -727,7 +731,7 @@ function buildComparisonBar(label, dnm, app, meets, mast, meetsDelta, meetsPlus)
 
 function buildECRSection(ecrData, grade, subject) {
   let html = `<div class="card">
-    <h3>Extended Constructed Response (ECR) — Grade ${grade} <span class="badge">${ecrData.valid_n} papers</span></h3>
+    <h3>Extended Constructed Response (ECR) — Grade ${grade} ${subject} <span class="badge">${ecrData.valid_n} papers</span></h3>
     <p style="font-size:0.8rem;color:#888;margin-bottom:0.8rem;">Distribution of ECR scores (0–10) for this grade level</p>
     <div class="ecr-grid">`;
 
