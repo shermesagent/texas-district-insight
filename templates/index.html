@@ -699,20 +699,23 @@ function buildComparisonBar(label, dnm, app, meets, mast, meetsDelta, meetsPlus)
     <div class="cmp-label">${label}</div>
     <div class="cmp-bar">
       <div class="perf-bar-row">
-        <div class="perf-bar-track"><div class="perf-bar-fill dnm" style="width:${dnm}%;height:16px;"></div></div>
+        <div class="perf-bar-track"><div class="perf-bar-fill dnm" style="width:${dnm}%"></div></div>
+        <div class="perf-bar-pct">${dnm.toFixed(0)}%</div>
       </div>
       <div class="perf-bar-row">
-        <div class="perf-bar-track"><div class="perf-bar-fill app" style="width:${app}%;height:16px;"></div></div>
+        <div class="perf-bar-track"><div class="perf-bar-fill app" style="width:${app}%"></div></div>
+        <div class="perf-bar-pct">${app.toFixed(0)}%</div>
       </div>
       <div class="perf-bar-row">
-        <div class="perf-bar-track"><div class="perf-bar-fill meets" style="width:${meets}%;height:16px;"></div></div>
+        <div class="perf-bar-track"><div class="perf-bar-fill meets" style="width:${meets}%"></div></div>
+        <div class="perf-bar-pct">${meets.toFixed(0)}%</div>
       </div>
       <div class="perf-bar-row">
-        <div class="perf-bar-track"><div class="perf-bar-fill mast" style="width:${mast}%;height:16px;"></div></div>
+        <div class="perf-bar-track"><div class="perf-bar-fill mast" style="width:${mast}%"></div></div>
+        <div class="perf-bar-pct">${mast.toFixed(0)}%</div>
       </div>
     </div>
-    <div class="cmp-pct">${meetsPlus.toFixed(0)}% Meets+</div>
-    <div class="cmp-delta ${deltaClass}">${deltaSign} ${deltaVal}pp</div>
+    <div class="cmp-delta ${deltaClass}">${deltaSign} ${deltaVal}pp vs ${label}</div>
   </div>`;
 }
 
@@ -814,7 +817,29 @@ function buildPeerTable(title, type, d, level, grade, subject, perf) {
           <th style="width:45px" class="num">Econ%</th>
         </tr>
       </thead>
-      <tbody>`;
+      <tbody>
+    <!-- Selected district row -->
+    ${(() => {
+      const dDnm = perf ? (perf.dnm_pct || 0) : 0;
+      const dApp = perf ? (perf.app_pct || 0) : 0;
+      const dMeets = perf ? (perf.meets_pct || 0) : 0;
+      const dMast = perf ? (perf.mast_pct || 0) : 0;
+      return `<tr class="peer-highlight-row">
+        <td class="rank-num">★</td>
+        <td class="peer-name">${d.name} <span class="peer-meta" style="color:#C08A2E;font-weight:600;">(selected)</span></td>
+        <td><div class="mini-peer-bar"><div style="display:flex;flex-direction:column;gap:2px;width:100%;">
+          <div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${dDnm}%;background:#C0392B;border-radius:2px;"></div></div>
+          <div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${dApp}%;background:#E67E22;border-radius:2px;"></div></div>
+          <div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${dMeets}%;background:#F1C40F;border-radius:2px;"></div></div>
+          <div style="height:10px;background:#e8e8e8;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${dMast}%;background:#27AE60;border-radius:2px;"></div></div>
+        </div></div></td>
+        <td class="num">${dMeets.toFixed(0)}%</td>
+        <td class="num"><span style="color:#888;">—</span></td>
+        <td class="num" style="font-size:0.75rem;color:#888;">${d.enrollment || '—'}</td>
+        <td class="num" style="font-size:0.75rem;color:#888;">${d.econ_disadv_pct != null ? d.econ_disadv_pct.toFixed(0) : '—'}</td>
+      </tr>`;
+    })()}
+    `;
 
   peers.forEach(p => {
     const pData = getPerformanceForSelectors(p, level, grade, subject);
