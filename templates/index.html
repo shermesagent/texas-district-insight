@@ -162,15 +162,17 @@
   }
 
   /* ── ECR section ── */
-  .ecr-grid { display: grid; grid-template-columns: repeat(11, 1fr); gap: 0.3rem; }
+  .ecr-grid { display: grid; grid-template-columns: repeat(11, 1fr); gap: 0.2rem; }
   .ecr-bar-col { text-align: center; }
-  .ecr-bar-col .ecr-label { font-size: 0.7rem; color: #888; margin-top: 0.2rem; }
+  .ecr-bar-col .ecr-label { font-size: 0.7rem; color: #888; margin-top: 0.15rem; }
   .ecr-bar-col .ecr-bar-wrap { height: 120px; display: flex; align-items: flex-end; justify-content: center; }
-  .ecr-bar-col .ecr-bar {
-    width: 24px; background: linear-gradient(to top, #14233B, #C08A2E); border-radius: 3px 3px 0 0;
-    min-height: 2px; transition: height 0.5s ease;
-  }
-  .ecr-bar-col .ecr-pct { font-size: 0.65rem; color: #555; font-weight: 600; margin-top: 0.15rem; }
+  .ecr-bar-single { width: 24px; background: linear-gradient(to top, #14233B, #C08A2E); border-radius: 3px 3px 0 0; min-height: 2px; transition: height 0.5s ease; }
+  .ecr-pct { font-size: 0.7rem; color: #555; margin-top: 0.2rem; }
+  .ecr-compare { margin-top: 1rem; border-top: 1px solid #E5E7EB; padding-top: 0.75rem; }
+  .ecr-compare-table { font-size: 0.78rem; }
+  .ecr-compare-table th:first-child { width: 3rem; text-align: center; }
+  .ecr-compare-table th:not(:first-child) { text-align: right; }
+  .ecr-compare-table td:not(:first-child) { text-align: right; }
 
   /* ── Peer tables ── */
   .peer-section { }
@@ -302,6 +304,9 @@
   <div class="control-group">
     <label for="level-select">Level</label>
     <select id="level-select">
+      <option value="all-scores">All Scores</option>
+      <option value="all-reading">All Reading</option>
+      <option value="all-math">All Math</option>
       <option value="3-8">Grades 3–8</option>
       <option value="EOC">EOC</option>
     </select>
@@ -458,10 +463,25 @@ function getECRForGrade(d, grade, level) {
 
 function populateSelectors(d) {
   const level = levelSelect.value;
+  const gradeGroup = gradeSelect.parentElement;
+  const subjectGroup = subjectSelect.parentElement;
+  const compositeKeys = {'all-scores':1,'all-reading':1,'all-math':1};
 
   // Populate grades based on level
   gradeSelect.innerHTML = '';
   subjectSelect.innerHTML = '';
+
+  if (compositeKeys[level]) {
+    // Composite mode: hide grade/subject controls, render directly
+    gradeGroup.style.display = 'none';
+    subjectGroup.style.display = 'none';
+    renderDashboardContent(d);
+    return;
+  }
+
+  // Show grade/subject controls for drill-down modes
+  gradeGroup.style.display = '';
+  subjectGroup.style.display = '';
 
   if (level === 'EOC') {
     // EOC mode: no grade selector, subjects from eoc
@@ -489,7 +509,7 @@ function populateSelectors(d) {
       gradeSelect.appendChild(opt);
     });
 
-    // Set initial grade and populate subjects
+    // Set initial grade and populate subjects (no composites here — they're in LEVEL now)
     updateSubjectsForGrade();
   }
 
@@ -536,15 +556,33 @@ function renderDashboardContent(d) {
   const level = levelSelect.value;
   const grade = gradeSelect.value;
   const subject = subjectSelect.value;
+  const compositeKeys = {'all-scores':1,'all-reading':1,'all-math':1};
 
-  if (!subject || !grade) return;
+  if (!grade && !compositeKeys[level]) return;
+
+  const isComposite = compositeKeys[level] ? true : false;
+  const compositeKey = isComposite ? level : null;
 
   const perf = getPerformanceForSelectors(d, level, grade, subject);
-  const ecrData = getECRForGrade(d, grade, level);
-  const hasECR = ecrData && ecrData.valid_n > 0;
-  const isReadingSubject = subject && (
-    subject.toUpperCase().includes('READING') ||
-    subject.toUpperCase().includes('RLA')
+
+  // ECR — per-grade or composite
+  let ecrData = null, hasECR = false, subjectHasReading = false;
+  if (isComposite) {
+    subjectHasReading = (compositeKey === 'all-reading' || compositeKey === 'all-scores');
+    if (subjectHasReading) {
+      ecrData = getCompositeECR(d, compositeKey);
+      hasECR = ecrData && ecrData.valid_n > 0;
+    }
+  } else {
+    ecrData = getECRForGrade(d, grade, level);
+    hasECR = ecrData && ecrData.valid_n > 0;
+  }
+
+  const isReadingSubject = isComposite ? subjectHasReading : (
+    subject && (
+      subject.toUpperCase().includes('READING') ||
+      subject.toUpperCase().includes('RLA')
+    )
   );
 
   let html = '';
@@ -554,25 +592,36 @@ function renderDashboardContent(d) {
 
   // ── Performance Section ──
   html += `<div class="content">`;
-  html += buildPerformanceSection(d, level, grade, subject, perf);
+  html += buildPerformanceSection(d, level, grade, compositeKey || subject, perf);
   
   // ── ECR Section (Reading/RLA only) ──
+  // Render bars immediately; overlay lines loaded async
   if (hasECR && isReadingSubject) {
-    html += buildECRSection(ecrData, grade, subject);
+    html += buildECRSection(ecrData, isComposite ? 'All' : grade, compositeKey || subject, null, null);
   }
 
   // ── Peer Comparison Sections ──
-  html += buildPeerComparison(d, level, grade, subject, perf);
+  html += buildPeerComparison(d, level, grade, compositeKey || subject, perf);
 
   html += `</div>`;
 
   appContent.innerHTML = html;
   // Store state for sort re-renders
-  currentRenderState = { d, level, grade, subject, perf };
+  currentRenderState = { d, level, grade: isComposite ? 'All' : grade, subject: compositeKey || subject, perf };
+
+  // ── Load ECR benchmark overlays async ──
+  if (hasECR && isReadingSubject) {
+    if (isComposite) {
+      loadCompositeECRBenchmarks(d, compositeKey, ecrData);
+    } else {
+      loadECRBenchmarks(d, grade, subject, ecrData);
+    }
+  }
 }
 
 function buildDistrictHeader(d) {
-  const regionShort = d.region ? d.region.replace(/^REGION \d+:\s*/, '') : '';
+  // Format region nicely: "REGION 10: RICHARDSON" -> "Region 10: RICHARDSON"
+  const regionClean = d.region ? d.region.replace(/\bREGION\b/g, 'Region') : '';
   const enroll = d.enrollment || 0;
   const enrollDisp = enroll >= 1000 ? (enroll/1000).toFixed(1) + 'K' : enroll;
 
@@ -580,7 +629,7 @@ function buildDistrictHeader(d) {
   <div class="district-card">
     <div class="dc-name">${d.name} <span class="dc-cdc">${d.cdc}</span></div>
     <div class="dc-meta">
-      <span class="dc-meta-item"><strong>Region:</strong> ${regionShort || '—'}</span>
+      <span class="dc-meta-item"><strong>Region:</strong> ${regionClean || '—'}</span>
       <span class="dc-meta-item"><strong>County:</strong> ${d.county || '—'}</span>
     </div>
     <div class="dc-stats">
@@ -593,7 +642,9 @@ function buildDistrictHeader(d) {
 }
 
 function buildPerformanceSection(d, level, grade, subject, perf) {
-  const label = level === 'EOC' ? `${subject} (EOC)` : `Grade ${grade} ${subject}`;
+  const compositeLabels = {'all-reading':'All Reading Tests','all-math':'All Math Tests','all-scores':'All Scores'};
+  const label = compositeLabels[subject] || (level === 'EOC' ? `${subject} (EOC)` : `Grade ${grade} ${subject}`);
+  const isComposite = compositeLabels[subject] ? true : false;
   
   if (!perf) {
     return `<div class="card"><h3>${label}</h3><p style="color:#888;font-size:0.88rem;">No performance data available for this selection.</p></div>`;
@@ -652,11 +703,19 @@ function buildPerformanceSection(d, level, grade, subject, perf) {
   // Store perf for async use
   const _perf = perf;
   // Fetch benchmarks async
-  fetchBenchmarks(d, _perf, level, grade, subject)
-    .then(benchHtml => {
-      const el = document.getElementById('benchmarks-container');
-      if (el) el.innerHTML = benchHtml;
-    });
+  if (isComposite) {
+    fetchCompositeBenchmarks(d, _perf, subject)
+      .then(benchHtml => {
+        const el = document.getElementById('benchmarks-container');
+        if (el) el.innerHTML = benchHtml;
+      });
+  } else {
+    fetchBenchmarks(d, _perf, level, grade, subject)
+      .then(benchHtml => {
+        const el = document.getElementById('benchmarks-container');
+        if (el) el.innerHTML = benchHtml;
+      });
+  }
 
   return html;
 }
@@ -670,6 +729,19 @@ async function fetchBenchmarks(d, perf, level, grade, subject) {
     if (!res.ok) throw new Error('Benchmark fetch failed');
     const bench = await res.json();
 
+    return buildComparisonTable(perf, bench.state, bench.region, d);
+  } catch(e) {
+    return `<p style="color:#888;font-size:0.82rem;">Could not load benchmark data.</p>`;
+  }
+}
+
+async function fetchCompositeBenchmarks(d, perf, key) {
+  try {
+    const region = d.region || '';
+    const url = `/api/composite-benchmark/${encodeURIComponent(key)}${region ? '?region=' + encodeURIComponent(region) : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Composite benchmark fetch failed');
+    const bench = await res.json();
     return buildComparisonTable(perf, bench.state, bench.region, d);
   } catch(e) {
     return `<p style="color:#888;font-size:0.82rem;">Could not load benchmark data.</p>`;
@@ -740,28 +812,105 @@ function buildComparisonTable(perf, stateData, regionData, d) {
   return html;
 }
 
-function buildECRSection(ecrData, grade, subject) {
-  let html = `<div class="card">
-    <h3>Extended Constructed Response (ECR) — Grade ${grade} ${subject} <span class="badge">${ecrData.valid_n} papers</span></h3>
+function loadECRBenchmarks(d, grade, subject, districtEcrData) {
+  const region = d.region || '';
+  if (!region) return;
+  const cacheKey = `ecr-bm-${grade}-${region}`;
+
+  function replaceChart(stateData, regionData) {
+    const newHtml = buildECRSection(districtEcrData, grade, subject, stateData, regionData);
+    const old = document.querySelector('.ecr-chart-container');
+    if (old) old.outerHTML = newHtml;
+  }
+
+  if (window[cacheKey]) {
+    replaceChart(window[cacheKey].state, window[cacheKey].region);
+    return;
+  }
+
+  fetch(`/api/ecr-benchmark/${grade}?region=${encodeURIComponent(region)}`)
+    .then(r => r.json())
+    .then(data => {
+      window[cacheKey] = data;
+      replaceChart(data.state, data.region);
+    })
+    .catch(e => console.error('Failed to load ECR benchmarks:', e));
+}
+
+function loadCompositeECRBenchmarks(d, key, districtEcrData) {
+  const region = d.region || '';
+  if (!region) return;
+  const cacheKey = `ecr-bm-composite-${key}-${region}`;
+
+  function replaceChart(stateData, regionData) {
+    const newHtml = buildECRSection(districtEcrData, null, key, stateData, regionData);
+    const old = document.querySelector('.ecr-chart-container');
+    if (old) old.outerHTML = newHtml;
+  }
+
+  if (window[cacheKey]) {
+    replaceChart(window[cacheKey].state, window[cacheKey].region);
+    return;
+  }
+
+  fetch(`/api/composite-ecr-benchmark/${key}?region=${encodeURIComponent(region)}`)
+    .then(r => r.json())
+    .then(data => {
+      window[cacheKey] = data;
+      replaceChart(data.state, data.region);
+    })
+    .catch(e => console.error('Failed to load composite ECR benchmarks:', e));
+}
+
+
+function buildECRSection(ecrData, grade, subject, stateData, regionData) {
+  const compositeLabels = {'all-reading':'All Reading','all-math':'All Math','all-scores':'All Scores'};
+  const headerLabel = compositeLabels[subject] || `Grade ${grade} ${subject}`;
+  const ratings = ecrData.ratings || {};
+  const maxPct = Math.max(...Object.values(ratings), 1);
+  const stateRatings = stateData ? (stateData.ratings || {}) : null;
+  const regionRatings = regionData ? (regionData.ratings || {}) : null;
+  const hasComparison = stateData || regionData;
+
+  let html = `<div class="card ecr-chart-container">
+    <h3>Extended Constructed Response (ECR) — ${headerLabel} <span class="badge">${ecrData.valid_n} papers</span></h3>
     <p style="font-size:0.8rem;color:#888;margin-bottom:0.8rem;">Distribution of ECR scores (0–10) for this grade level</p>
     <div class="ecr-grid">`;
 
-  const ratings = ecrData.ratings || {};
-  const maxPct = Math.max(...Object.values(ratings), 1);
-
   for (let i = 0; i <= 10; i++) {
-    const pct = ratings[String(i)] || 0;
-    const barH = (pct / maxPct) * 100;
+    const dPct = ratings[String(i)] || 0;
     html += `<div class="ecr-bar-col">
       <div class="ecr-bar-wrap">
-        <div class="ecr-bar" style="height:${Math.max(barH, 4)}%"></div>
+        <div class="ecr-bar-single" style="height:${(dPct / maxPct) * 100}%;min-height:2px;"></div>
       </div>
-      <div class="ecr-pct">${pct.toFixed(0)}%</div>
+      <div class="ecr-pct">${dPct.toFixed(0)}%</div>
       <div class="ecr-label">${i}</div>
     </div>`;
   }
 
-  html += `</div></div>`;
+  html += `</div>`;
+
+  // ── State & Region comparison table ──
+  if (hasComparison) {
+    html += `<div class="ecr-compare">
+      <table class="cmp-table ecr-compare-table">
+        <thead><tr><th>Score</th><th>District</th><th>State Avg</th><th>Region Avg</th></tr></thead>
+        <tbody>`;
+    for (let i = 0; i <= 10; i++) {
+      const dPct = ratings[String(i)] || 0;
+      const sPct = stateRatings ? (stateRatings[String(i)] || 0) : null;
+      const rPct = regionRatings ? (regionRatings[String(i)] || 0) : null;
+      html += `<tr>
+        <td class="cmp-cat">${i}</td>
+        <td class="cmp-val">${dPct.toFixed(0)}%</td>
+        <td class="cmp-val">${sPct != null ? sPct.toFixed(0) + '%' : '—'}</td>
+        <td class="cmp-val">${rPct != null ? rPct.toFixed(0) + '%' : '—'}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  html += `</div>`;
   return html;
 }
 
@@ -787,13 +936,7 @@ function buildPeerTable(title, type, d, level, grade, subject, perf) {
   const districtMeets = perf ? perf.meets_pct : null;
 
   // Build combined list: insert selected district into peers so it sorts in-line
-  const districtAsPeer = {
-    cdc: d.cdc,
-    name: d.name,
-    enrollment: d.enrollment,
-    econ_disadv_pct: d.econ_disadv_pct,
-    _isSelected: true
-  };
+  const districtAsPeer = { ...d, _isSelected: true };
   const combined = [districtAsPeer, ...peers];
   const sorted = sortPeers(combined, sortState.by, sortState.dir, level, grade, subject, districtMeets);
 
@@ -995,6 +1138,10 @@ document.addEventListener('click', (e) => {
 });
 
 function getPerformanceForSelectors(d, level, grade, subject) {
+  // Handle composite subjects — now from LEVEL dropdown
+  if (level === 'all-reading' || level === 'all-math' || level === 'all-scores') {
+    return getCompositePerformance(d, level);
+  }
   if (!d) return null;
   if (level === 'EOC') {
     const subjData = (d.eoc || {})[subject];
@@ -1012,6 +1159,80 @@ function getPerformanceForSelectors(d, level, grade, subject) {
 function fmtPct(val) {
   if (val == null || isNaN(val)) return '—';
   return val.toFixed(1) + '%';
+}
+
+// ── Composite subject support ──
+
+function getCompositePerformance(d, key) {
+  if (!d) return null;
+  const defs = {
+    'all-reading': [
+      [false,'3','Reading'],[false,'4','Reading'],[false,'5','Reading'],
+      [false,'6','Reading'],[false,'7','Reading'],[false,'8','Reading'],
+      [true,null,'English I'],[true,null,'English II'],
+    ],
+    'all-math': [
+      [false,'3','Mathematics'],[false,'4','Mathematics'],[false,'5','Mathematics'],
+      [false,'6','Mathematics'],[false,'7','Mathematics'],[false,'8','Mathematics'],
+      [true,null,'Algebra I'],
+    ],
+    'all-scores': [
+      [false,'3','Reading'],[false,'4','Reading'],[false,'5','Reading'],
+      [false,'6','Reading'],[false,'7','Reading'],[false,'8','Reading'],
+      [true,null,'English I'],[true,null,'English II'],
+      [false,'3','Mathematics'],[false,'4','Mathematics'],[false,'5','Mathematics'],
+      [false,'6','Mathematics'],[false,'7','Mathematics'],[false,'8','Mathematics'],
+      [true,null,'Algebra I'],
+      [true,null,'Biology'],[true,null,'U.S. History'],
+    ],
+  };
+  const entries = defs[key];
+  if (!entries) return null;
+  let totalT = 0, sumApp = 0, sumMeets = 0, sumMast = 0, sumDNM = 0, sumScale = 0;
+  for (const [isEoc, g, subj] of entries) {
+    const source = isEoc ? (d.eoc || {}) : ((d.grades_3_8 || {})[g || ''] || {});
+    const sd = source[subj];
+    if (sd && sd.tests_taken > 0 && sd.avg_scale != null) {
+      totalT += sd.tests_taken;
+      sumApp += (sd.app_pct || 0) * sd.tests_taken;
+      sumMeets += (sd.meets_pct || 0) * sd.tests_taken;
+      sumMast += (sd.mast_pct || 0) * sd.tests_taken;
+      sumDNM += (sd.dnm_pct || 0) * sd.tests_taken;
+      sumScale += (sd.avg_scale || 0) * sd.tests_taken;
+    }
+  }
+  if (!totalT) return null;
+  return {
+    tests_taken: totalT,
+    avg_scale: Math.round(sumScale / totalT),
+    app_pct: sumApp / totalT,
+    meets_pct: sumMeets / totalT,
+    mast_pct: sumMast / totalT,
+    dnm_pct: sumDNM / totalT,
+  };
+}
+
+function getCompositeECR(d, key) {
+  if (!d) return null;
+  // Only reading composites have ECR (all-reading, all-scores)
+  if (key !== 'all-reading' && key !== 'all-scores') return null;
+  const grades = ['3','4','5','6','7','8'];
+  let totalN = 0;
+  const ratingsSum = {};
+  for (let i = 0; i <= 10; i++) ratingsSum[String(i)] = 0;
+  for (const g of grades) {
+    const ecr = (d.ecr || {})[g];
+    if (!ecr || !ecr.valid_n) continue;
+    const n = ecr.valid_n;
+    totalN += n;
+    for (let i = 0; i <= 10; i++) {
+      ratingsSum[String(i)] += ((ecr.ratings || {})[String(i)] || 0) * n;
+    }
+  }
+  if (!totalN) return null;
+  const ratings = {};
+  for (let i = 0; i <= 10; i++) ratings[String(i)] = ratingsSum[String(i)] / totalN;
+  return { valid_n: totalN, ratings };
 }
 </script>
 </body>

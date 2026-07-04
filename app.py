@@ -146,6 +146,207 @@ def compute_region_benchmark(region, subject, grade_or_eoc=None, is_eoc=False):
         "mast_pct": mast_pct,
     }
 
+# ── Helper: compute ECR state/region benchmarks ──
+def compute_ecr_benchmarks(grade):
+    """Compute weighted state ECR score distribution for a grade across all districts."""
+    ratings_sum = {str(i): 0.0 for i in range(11)}
+    total_n = 0
+    for cdc, data in staar.items():
+        ecr = data.get("ecr", {})
+        grade_ecr = ecr.get(str(grade))
+        if not grade_ecr or not grade_ecr.get("valid_n", 0):
+            continue
+        n = grade_ecr["valid_n"]
+        total_n += n
+        for i in range(11):
+            si = str(i)
+            ratings_sum[si] += grade_ecr.get("ratings", {}).get(si, 0) * n
+    if total_n == 0:
+        return None
+    return {
+        "valid_n": total_n,
+        "ratings": {si: round(ratings_sum[si] / total_n, 1) for si in ratings_sum},
+    }
+
+def compute_region_ecr_benchmark(region, grade):
+    """Compute weighted region ECR score distribution for a grade."""
+    cdcs = region_districts.get(region, [])
+    ratings_sum = {str(i): 0.0 for i in range(11)}
+    total_n = 0
+    for cdc in cdcs:
+        data = staar.get(cdc)
+        if not data:
+            continue
+        ecr = data.get("ecr", {})
+        grade_ecr = ecr.get(str(grade))
+        if not grade_ecr or not grade_ecr.get("valid_n", 0):
+            continue
+        n = grade_ecr["valid_n"]
+        total_n += n
+        for i in range(11):
+            si = str(i)
+            ratings_sum[si] += grade_ecr.get("ratings", {}).get(si, 0) * n
+    if total_n == 0:
+        return None
+    return {
+        "valid_n": total_n,
+        "ratings": {si: round(ratings_sum[si] / total_n, 1) for si in ratings_sum},
+    }
+
+# ── Composite definitions (All Reading, All Math, All Scores) ──
+COMPOSITE_DEFS = {
+    "all-reading": [
+        (False, "3", "Reading"), (False, "4", "Reading"), (False, "5", "Reading"),
+        (False, "6", "Reading"), (False, "7", "Reading"), (False, "8", "Reading"),
+        (True, None, "English I"), (True, None, "English II"),
+    ],
+    "all-math": [
+        (False, "3", "Mathematics"), (False, "4", "Mathematics"), (False, "5", "Mathematics"),
+        (False, "6", "Mathematics"), (False, "7", "Mathematics"), (False, "8", "Mathematics"),
+        (True, None, "Algebra I"),
+    ],
+    "all-scores": [
+        (False, "3", "Reading"), (False, "4", "Reading"), (False, "5", "Reading"),
+        (False, "6", "Reading"), (False, "7", "Reading"), (False, "8", "Reading"),
+        (True, None, "English I"), (True, None, "English II"),
+        (False, "3", "Mathematics"), (False, "4", "Mathematics"), (False, "5", "Mathematics"),
+        (False, "6", "Mathematics"), (False, "7", "Mathematics"), (False, "8", "Mathematics"),
+        (True, None, "Algebra I"),
+        (True, None, "Biology"), (True, None, "U.S. History"),
+    ],
+}
+
+COMPOSITE_ECR_GRADES = {
+    "all-reading": ["3", "4", "5", "6", "7", "8"],
+    "all-scores": ["3", "4", "5", "6", "7", "8"],
+}
+
+
+def compute_composite_benchmark(key):
+    """Weighted state averages for a composite (all-reading, all-math, all-scores)."""
+    defs = COMPOSITE_DEFS.get(key)
+    if not defs:
+        return None
+    vals = []
+    for cdc, data in staar.items():
+        for is_eoc, grade, subject in defs:
+            source = data.get("eoc" if is_eoc else "grades_3_8", {})
+            if is_eoc:
+                subj_data = source.get(subject)
+            else:
+                subj_data = source.get(str(grade), {}).get(subject)
+            if subj_data and subj_data.get("tests_taken", 0) > 0 and subj_data.get("avg_scale"):
+                vals.append(subj_data)
+    if not vals:
+        return None
+    total_t = sum(v["tests_taken"] for v in vals)
+    avg_scale = round(sum(v["avg_scale"] * v["tests_taken"] for v in vals) / total_t) if total_t else None
+    app_pct = round(sum(v["app_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    meets_pct = round(sum(v["meets_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    mast_pct = round(sum(v["mast_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    dnm_pct = round(sum(v["dnm_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    return {
+        "tests_taken": total_t,
+        "avg_scale": avg_scale,
+        "dnm_pct": dnm_pct,
+        "app_pct": app_pct,
+        "meets_pct": meets_pct,
+        "mast_pct": mast_pct,
+    }
+
+
+def compute_region_composite_benchmark(region, key):
+    """Weighted region averages for a composite."""
+    defs = COMPOSITE_DEFS.get(key)
+    if not defs:
+        return None
+    cdcs = region_districts.get(region, [])
+    vals = []
+    for cdc in cdcs:
+        data = staar.get(cdc)
+        if not data:
+            continue
+        for is_eoc, grade, subject in defs:
+            source = data.get("eoc" if is_eoc else "grades_3_8", {})
+            if is_eoc:
+                subj_data = source.get(subject)
+            else:
+                subj_data = source.get(str(grade), {}).get(subject)
+            if subj_data and subj_data.get("tests_taken", 0) > 0 and subj_data.get("avg_scale"):
+                vals.append(subj_data)
+    if not vals:
+        return None
+    total_t = sum(v["tests_taken"] for v in vals)
+    avg_scale = round(sum(v["avg_scale"] * v["tests_taken"] for v in vals) / total_t) if total_t else None
+    app_pct = round(sum(v["app_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    meets_pct = round(sum(v["meets_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    mast_pct = round(sum(v["mast_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    dnm_pct = round(sum(v["dnm_pct"] * v["tests_taken"] for v in vals) / total_t, 1) if total_t else None
+    return {
+        "tests_taken": total_t,
+        "avg_scale": avg_scale,
+        "dnm_pct": dnm_pct,
+        "app_pct": app_pct,
+        "meets_pct": meets_pct,
+        "mast_pct": mast_pct,
+    }
+
+
+def compute_composite_ecr_benchmark(key):
+    """Weighted state ECR distribution across multiple grades for a composite."""
+    grades = COMPOSITE_ECR_GRADES.get(key)
+    if not grades:
+        return None
+    ratings_sum = {str(i): 0.0 for i in range(11)}
+    total_n = 0
+    for cdc, data in staar.items():
+        ecr = data.get("ecr", {})
+        for g in grades:
+            grade_ecr = ecr.get(g)
+            if not grade_ecr or not grade_ecr.get("valid_n", 0):
+                continue
+            n = grade_ecr["valid_n"]
+            total_n += n
+            for i in range(11):
+                si = str(i)
+                ratings_sum[si] += grade_ecr.get("ratings", {}).get(si, 0) * n
+    if total_n == 0:
+        return None
+    return {
+        "valid_n": total_n,
+        "ratings": {si: round(ratings_sum[si] / total_n, 1) for si in ratings_sum},
+    }
+
+
+def compute_region_composite_ecr_benchmark(region, key):
+    """Weighted region ECR distribution across multiple grades for a composite."""
+    grades = COMPOSITE_ECR_GRADES.get(key)
+    if not grades:
+        return None
+    cdcs = region_districts.get(region, [])
+    ratings_sum = {str(i): 0.0 for i in range(11)}
+    total_n = 0
+    for cdc in cdcs:
+        data = staar.get(cdc)
+        if not data:
+            continue
+        ecr = data.get("ecr", {})
+        for g in grades:
+            grade_ecr = ecr.get(g)
+            if not grade_ecr or not grade_ecr.get("valid_n", 0):
+                continue
+            n = grade_ecr["valid_n"]
+            total_n += n
+            for i in range(11):
+                si = str(i)
+                ratings_sum[si] += grade_ecr.get("ratings", {}).get(si, 0) * n
+    if total_n == 0:
+        return None
+    return {
+        "valid_n": total_n,
+        "ratings": {si: round(ratings_sum[si] / total_n, 1) for si in ratings_sum},
+    }
+
 # ── Benchmark cache ──
 from functools import lru_cache
 
@@ -156,6 +357,14 @@ def get_benchmark(subject, grade, is_eoc=False):
 @lru_cache(maxsize=500)
 def get_region_benchmark(region, subject, grade, is_eoc=False):
     return compute_region_benchmark(region, subject, grade, is_eoc)
+
+@lru_cache(maxsize=250)
+def get_ecr_benchmark(grade):
+    return compute_ecr_benchmarks(grade)
+
+@lru_cache(maxsize=250)
+def get_region_ecr_benchmark(region, grade):
+    return compute_region_ecr_benchmark(region, grade)
 
 # ── FastAPI ──
 app = FastAPI(title="Texas School Compass Dashboard")
@@ -250,6 +459,58 @@ def get_benchmark_endpoint(subject: str, grade: str, region: Optional[str] = Non
     reg = None
     if region:
         reg = get_region_benchmark(region, subject, grade_val, is_eoc)
+    return {"state": state, "region": reg}
+
+# ── API: ECR benchmark ──
+@app.get("/api/ecr-benchmark/{grade}")
+def get_ecr_benchmark_endpoint(grade: str, region: Optional[str] = None):
+    """Get state and optional region ECR score distributions for a grade."""
+    grade_val = str(grade)
+    state = get_ecr_benchmark(grade_val)
+    reg = None
+    if region:
+        reg = get_region_ecr_benchmark(region, grade_val)
+    return {"state": state, "region": reg}
+
+# ── Composite cached wrappers ──
+@lru_cache(maxsize=100)
+def get_composite_benchmark(key):
+    return compute_composite_benchmark(key)
+
+@lru_cache(maxsize=100)
+def get_region_composite_benchmark(region, key):
+    return compute_region_composite_benchmark(region, key)
+
+@lru_cache(maxsize=50)
+def get_composite_ecr_benchmark(key):
+    return compute_composite_ecr_benchmark(key)
+
+@lru_cache(maxsize=50)
+def get_region_composite_ecr_benchmark(region, key):
+    return compute_region_composite_ecr_benchmark(region, key)
+
+# ── API: Composite benchmark ──
+@app.get("/api/composite-benchmark/{key}")
+def get_composite_benchmark_endpoint(key: str, region: Optional[str] = None):
+    """Get state and optional region benchmarks for a composite (all-reading, all-math, all-scores)."""
+    if key not in COMPOSITE_DEFS:
+        raise HTTPException(404, f"Composite '{key}' not found")
+    state = get_composite_benchmark(key)
+    reg = None
+    if region:
+        reg = get_region_composite_benchmark(region, key)
+    return {"state": state, "region": reg}
+
+# ── API: Composite ECR benchmark ──
+@app.get("/api/composite-ecr-benchmark/{key}")
+def get_composite_ecr_benchmark_endpoint(key: str, region: Optional[str] = None):
+    """Get state and optional region ECR distributions for a composite."""
+    if key not in COMPOSITE_ECR_GRADES:
+        raise HTTPException(404, f"Composite ECR '{key}' not found")
+    state = get_composite_ecr_benchmark(key)
+    reg = None
+    if region:
+        reg = get_region_composite_ecr_benchmark(region, key)
     return {"state": state, "region": reg}
 
 # ── API: Available subjects ──
