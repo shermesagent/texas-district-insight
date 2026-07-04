@@ -871,7 +871,13 @@ function buildPeerTable(title, type, d, level, grade, subject, perf) {
     const rankNum = isSelected ? '★' : (idx + 1);
     const nameSuffix = isSelected ? ' <span class="peer-meta" style="color:#C08A2E;font-weight:600;">(selected)</span>' : ` <span class="peer-meta">${item.cdc}</span>`;
 
-    const pData = getPerformanceForSelectors(item, level, grade, subject);
+    let pData;
+    if (isSelected && perf) {
+      // Use the passed-in perf for the selected district row (it has the data)
+      pData = { app_pct: perf.app_pct, meets_pct: perf.meets_pct, mast_pct: perf.mast_pct };
+    } else {
+      pData = getPerformanceForSelectors(item, level, grade, subject);
+    }
     const pApp = pData ? pData.app_pct : null;
     const pMeets = pData ? pData.meets_pct : null;
     const pMast = pData ? pData.mast_pct : null;
